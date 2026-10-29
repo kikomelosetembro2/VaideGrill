@@ -1,0 +1,19 @@
+<svg viewBox="0 0 200 200" width="64" height="64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="94" fill="#580c1f" stroke="#eab308" stroke-width="6" />
+  <circle cx="100" cy="100" r="86" fill="#36050b" stroke="#ca8a04" stroke-width="2" />
+  
+  {/* Flame */}
+  <path d="M 100 28 C 115 50, 142 75, 132 105 C 122 85, 112 80, 106 65 C 100 85, 82 85, 68 105 C 60 78, 85 50, 100 28 Z" fill="#881337" />
+  <path d="M 100 40 C 110 58, 130 80, 122 102 C 114 88, 108 82, 104 70 C 98 84, 86 84, 78 102 C 70 80, 90 58, 100 40 Z" fill="#eab308" />
+
+  {/* Burger */}
+  <g transform="translate(0, 15)">
+    <path d="M 54 95 C 54 75, 75 66, 100 66 C 125 66, 146 75, 146 95 Z" fill="#eab308" stroke="#36050b" stroke-width="4" />
+    <ellipse cx="80" cy="78" rx="2" ry="3" fill="#ffffff" />
+    <ellipse cx="100" cy="74" rx="2" ry="3" fill="#ffffff" />
+    <ellipse cx="120" cy="78" rx="2" ry="3" fill="#ffffff" />
+    <path d="M 60 97 L 140 97 L 132 106 L 120 100 L 105 108 L 88 100 L 75 106 Z" fill="#facc15" />
+    <rect x="50" y="102" width="100" height="16" rx="8" fill="#580c1f" stroke="#36050b" stroke-width="3" />
+    <path d="M 54 122 L 146 122 C 146 136, 128 140, 100 140 C 72 140, 54 136, 54 122 Z" fill="#ca8a04" stroke="#36050b" stroke-width="4" />
+  </g>
+</svg>

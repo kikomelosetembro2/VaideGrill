@@ -1,0 +1,6 @@
+{
+  "name": "Lanchonete Vai de Grill - Sanduíches Artesanais",
+  "description": "App e cardápio online da Lanchonete Vai de Grill em Rio Branco, Acre. Sanduíches artesanais na brasa, clube de fidelidade, painel administrativo e delivery em tempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
