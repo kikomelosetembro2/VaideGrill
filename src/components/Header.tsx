@@ -51,17 +51,17 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
 }) => {
   return (
-    <header className="sticky top-0 z-40 bg-[#16070a]/95 backdrop-blur-md border-b border-[#eab308]/30 shadow-2xl">
-      {/* Top emergency contact and address bar with mustard and wine styling */}
-      <div className="bg-gradient-to-r from-[#6b0f1a] via-[#580c1f] to-[#36050b] text-[#facc15] px-3 sm:px-6 py-1.5 text-xs font-bold flex flex-wrap justify-between items-center gap-2 border-b border-[#eab308]/20">
+    <header className="sticky top-0 z-40 bg-[#180407]/95 backdrop-blur-md border-b border-[#eab308]/40 shadow-2xl">
+      {/* Top emergency contact and address bar with red and mustard styling */}
+      <div className="bg-gradient-to-r from-[#b91c1c] via-[#dc2626] to-[#991b1b] text-white px-3 sm:px-6 py-1.5 text-xs font-bold flex flex-wrap justify-between items-center gap-2 border-b border-[#eab308]/30">
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <span className="flex items-center gap-1.5 text-white">
-            <MapPin className="w-3.5 h-3.5 text-[#eab308]" />
+            <MapPin className="w-3.5 h-3.5 text-[#facc15]" />
             <span>{RESTAURANT_INFO.address} - Rio Branco, AC</span>
           </span>
-          <span className="hidden sm:inline text-[#eab308]">•</span>
-          <span className="flex items-center gap-1.5 text-zinc-200">
-            <Clock className="w-3.5 h-3.5 text-[#eab308]" />
+          <span className="hidden sm:inline text-[#facc15]">•</span>
+          <span className="flex items-center gap-1.5 text-amber-100">
+            <Clock className="w-3.5 h-3.5 text-[#facc15]" />
             <span>Terça a Domingo: 18:00 às 23:00 (Segunda Fechado)</span>
           </span>
         </div>
@@ -71,9 +71,9 @@ export const Header: React.FC<HeaderProps> = ({
             href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}?text=${encodeURIComponent('Olá Vai de Grill! Gostaria de fazer um pedido de sanduíche artesanal.')}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-white hover:text-[#eab308] font-black underline transition-colors"
+            className="flex items-center gap-1 text-white hover:text-[#facc15] font-black underline transition-colors"
           >
-            <Phone className="w-3.5 h-3.5 text-[#eab308]" />
+            <Phone className="w-3.5 h-3.5 text-[#facc15]" />
             <span>Delivery: {RESTAURANT_INFO.phone}</span>
           </a>
         </div>
@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
           {activeOrder && (
             <button
               onClick={onOpenTracking}
-              className="flex items-center gap-1.5 bg-[#290e15] border border-[#eab308]/60 text-[#eab308] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black hover:bg-[#3d121e] transition-colors animate-pulse"
+              className="flex items-center gap-1.5 bg-[#7f1d1d] border border-[#eab308] text-[#facc15] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black hover:bg-[#991b1b] transition-colors animate-pulse"
               title="Acompanhar Pedido em Tempo Real"
             >
               <CheckCircle2 className="w-4 h-4 text-[#eab308]" />
@@ -111,18 +111,18 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Loyalty Club Button */}
           <button
             onClick={onOpenFidelidade}
-            className="flex items-center gap-1.5 bg-[#240e15] hover:bg-[#381420] text-[#facc15] border border-[#eab308]/40 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105"
+            className="flex items-center gap-1.5 bg-[#7f1d1d] hover:bg-[#991b1b] text-white border border-[#eab308]/60 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105"
             title="Ver Seus Pontos de Fidelidade e Resgatar Prêmios"
           >
             <Award className="w-4 h-4 text-[#eab308]" />
             <span className="hidden md:inline">Clube</span>
-            <span>{loyaltyPoints} pts</span>
+            <span className="text-[#facc15]">{loyaltyPoints} pts</span>
           </button>
 
           {/* Monte seu Sanduíche Button */}
           <button
             onClick={onOpenBuildBurger}
-            className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-[#eab308] to-[#ca8a04] hover:from-[#facc15] hover:to-[#eab308] text-black px-3 py-2 rounded-xl text-xs font-black shadow-md shadow-[#eab308]/20 transition-all hover:scale-105"
+            className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-[#eab308] to-[#ca8a04] hover:from-[#facc15] hover:to-[#eab308] text-black px-3 py-2 rounded-xl text-xs font-black shadow-md shadow-[#eab308]/30 transition-all hover:scale-105"
           >
             <Layers className="w-4 h-4 text-black" />
             <span>Monte seu Sanduíche</span>
@@ -131,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Adicionais da Brasa Tool Button */}
           <button
             onClick={onOpenExtrasShop}
-            className="flex items-center gap-1.5 bg-[#6b0f1a] hover:bg-[#881337] text-white border border-[#eab308]/50 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105"
+            className="flex items-center gap-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-white border border-[#eab308] px-2.5 sm:px-3 py-2 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105"
             title="Ferramenta: Comprar Adicionais e Porções da Brasa"
           >
             <span className="text-[#eab308] font-black">+</span>
@@ -142,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Admin Panel Button */}
           <button
             onClick={onOpenAdminPanel}
-            className="flex items-center gap-1.5 bg-[#2a0e16] hover:bg-[#401321] text-[#facc15] px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold border border-[#eab308]/50 transition-colors"
+            className="flex items-center gap-1.5 bg-[#7f1d1d] hover:bg-[#991b1b] text-[#facc15] px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold border border-[#eab308]/60 transition-colors"
             title="Painel Administrativo: Dashboard, Produtos Mais Vendidos e Cadastro"
           >
             <BarChart3 className="w-4 h-4 text-[#eab308]" />
@@ -156,7 +156,7 @@ export const Header: React.FC<HeaderProps> = ({
             className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-extrabold border transition-colors ${
               isKdsActive 
                 ? 'bg-[#eab308] text-black border-[#eab308]' 
-                : 'bg-zinc-900/80 text-zinc-300 border-zinc-750 hover:border-[#eab308]/50 hover:text-white'
+                : 'bg-[#26070a] text-zinc-200 border-red-900/60 hover:border-[#eab308]/60 hover:text-white'
             }`}
             title="Abrir Gerenciador de Pedidos da Cozinha (KDS)"
           >
@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Auth Button */}
           <button
             onClick={onOpenAuth}
-            className="hidden sm:flex items-center gap-1.5 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white px-2.5 sm:px-3 py-2 rounded-xl text-xs font-medium border border-zinc-750 transition-colors"
+            className="hidden sm:flex items-center gap-1.5 bg-[#26070a] hover:bg-[#3d0c10] text-zinc-200 hover:text-white px-2.5 sm:px-3 py-2 rounded-xl text-xs font-medium border border-red-900/60 transition-colors"
             title={currentUser ? `Logado como ${currentUser.name}` : 'Entrar na Conta'}
           >
             <User className="w-4 h-4 text-[#eab308]" />
@@ -180,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Cart Trigger */}
           <button
             onClick={onOpenCart}
-            className="relative flex items-center gap-2 bg-[#6b0f1a] hover:bg-[#7f1d1d] border border-[#eab308]/60 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all hover:scale-105 shadow-md shadow-[#6b0f1a]/40"
+            className="relative flex items-center gap-2 bg-[#dc2626] hover:bg-[#b91c1c] border border-[#eab308] text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all hover:scale-105 shadow-md shadow-[#dc2626]/40"
             aria-label="Ver Carrinho de Compras"
           >
             <ShoppingBag className="w-4 h-4 text-[#eab308]" />

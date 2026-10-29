@@ -92,7 +92,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
                 Envio Imediato para a Cozinha
               </span>
               <p className="text-xs font-bold text-black/90">
-                Ao clicar abaixo, o WhatsApp abrirá com o pedido pré-formatado para o telefone <strong>(68) 99227-7408</strong>.
+                Ao clicar abaixo, o WhatsApp abrirá com o pedido pré-formatado para o telefone <strong>(68) 99224-9224</strong>.
               </p>
             </div>
           </div>

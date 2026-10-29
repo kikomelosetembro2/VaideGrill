@@ -56,7 +56,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOrderCreated,
 }) => {
   const [customerName, setCustomerName] = useState(currentUser?.name || 'Cliente Vai de Grill');
-  const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '(68) 99227-7408');
+  const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '(68) 99224-9224');
   const [street, setStreet] = useState('Rua A');
   const [streetNumber, setStreetNumber] = useState('1176');
   const [complement, setComplement] = useState('');
@@ -195,7 +195,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   type="tel"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="(68) 99227-7408"
+                  placeholder="(68) 99224-9224"
                   className="w-full bg-zinc-900 border border-zinc-750 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:border-[#eab308]"
                   required
                 />

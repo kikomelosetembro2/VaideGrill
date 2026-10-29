@@ -22,7 +22,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLoginSuccess,
 }) => {
   const [step, setStep] = useState<'method' | 'otp' | 'profile'>('method');
-  const [phone, setPhone] = useState('(68) 99227-7408');
+  const [phone, setPhone] = useState('(68) 99224-9224');
   const [name, setName] = useState('Cliente Vai de Grill');
   const [otpCode, setOtpCode] = useState(['5', '9', '2', '1', '0', '8']);
   const [simulatedReceivedCode, setSimulatedReceivedCode] = useState('');
@@ -58,7 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     playSound('success');
     onLoginSuccess({
       name: provider === 'Google' ? 'Usuário Google' : 'Usuário Apple ID',
-      phone: '(68) 99227-7408',
+      phone: '(68) 99224-9224',
     });
     onClose();
   };
@@ -139,7 +139,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(68) 99227-7408"
+                    placeholder="(68) 99224-9224"
                     className="w-full bg-zinc-900 border border-zinc-750 rounded-xl pl-10 pr-3 py-2.5 text-white font-bold text-xs focus:border-[#eab308] focus:outline-none"
                     required
                   />

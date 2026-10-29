@@ -119,7 +119,7 @@ export function formatOrderWhatsAppMessage(order: Order): string {
   // SEÇÃO 4: FORMA DE PAGAMENTO
   msg += `💳 *4. FORMA DE PAGAMENTO*\n`;
   const paymentLabels: Record<string, string> = {
-    pix: 'PIX (Chave Celular: (68) 99227-7408)',
+    pix: 'PIX (Chave Celular: (68) 99224-9224)',
     cartao_credito: 'Cartão de Crédito / Débito',
     carteira_digital: 'Carteira Digital (Apple Pay / Google Pay)',
     dinheiro: 'Dinheiro na Entrega',
@@ -138,7 +138,7 @@ export function formatOrderWhatsAppMessage(order: Order): string {
 
   msg += `\n${doubleLine}\n`;
   msg += `🔥 *Vai de Grill - O Sabor do Sanduíche Artesanal na Brasa*\n`;
-  msg += `📞 WhatsApp Delivery: (68) 99227-7408\n`;
+  msg += `📞 WhatsApp Delivery: (68) 99224-9224\n`;
   msg += `📍 Rua A, 1176 - Bairro João Eduardo, Rio Branco - AC`;
 
   return msg;

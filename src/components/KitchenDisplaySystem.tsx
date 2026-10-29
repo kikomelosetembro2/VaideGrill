@@ -364,7 +364,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
               <p className="text-[10px] leading-tight">
                 Rua A, 1176 - Bairro João Eduardo<br />
                 Rio Branco - Acre • CEP: 69911-000<br />
-                Telefone/WhatsApp: (68) 99227-7408
+                Telefone/WhatsApp: (68) 99224-9224
               </p>
               <div className="pt-2 font-black text-sm">
                 PEDIDO #{printingOrder.id}

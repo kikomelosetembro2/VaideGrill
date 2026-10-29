@@ -31,8 +31,8 @@ export const VaiDeGrillLogo: React.FC<VaiDeGrillLogoProps> = ({
       xmlns="http://www.w3.org/2000/svg"
     >
       {/* Outer shield or circular emblem */}
-      <circle cx="100" cy="100" r="94" fill="#580c1f" stroke="#eab308" strokeWidth="5" />
-      <circle cx="100" cy="100" r="86" fill="#36050b" stroke="#ca8a04" strokeWidth="2" strokeDasharray="6 4" />
+      <circle cx="100" cy="100" r="94" fill="#b91c1c" stroke="#eab308" strokeWidth="5" />
+      <circle cx="100" cy="100" r="86" fill="#991b1b" stroke="#ca8a04" strokeWidth="2" strokeDasharray="6 4" />
 
       {/* Sizzling Grill Grate lines */}
       <g stroke="#eab308" strokeWidth="3" opacity="0.4">
@@ -41,12 +41,12 @@ export const VaiDeGrillLogo: React.FC<VaiDeGrillLogoProps> = ({
         <line x1="55" y1="154" x2="145" y2="154" />
       </g>
 
-      {/* Fiery Artisan Grill Flames (Mustard Yellow & Wine Flame) */}
+      {/* Fiery Artisan Grill Flames (Mustard Yellow & Red Flame) */}
       <g>
-        {/* Back flame (Vinho sangue glow) */}
+        {/* Back flame (Vermelho vivo glow) */}
         <path
           d="M 100 28 C 115 50, 142 75, 132 105 C 122 85, 112 80, 106 65 C 100 85, 82 85, 68 105 C 60 78, 85 50, 100 28 Z"
-          fill="#881337"
+          fill="#dc2626"
         />
         {/* Core flame (Amarelo mostarda vivo) */}
         <path

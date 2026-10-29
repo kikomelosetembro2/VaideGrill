@@ -9,8 +9,8 @@ export const RESTAURANT_INFO = {
   city: 'Rio Branco',
   state: 'Acre',
   zipCode: '69911-000',
-  phone: '(68) 99227-7408',
-  whatsappRaw: '5568992277408',
+  phone: '(68) 99224-9224',
+  whatsappRaw: '5568992249224',
   openingHours: 'Terça a Domingo: 18:00 às 23:00',
   openingSchedule: 'Terça-feira a Domingo das 18:00 às 23:00 (Segunda Fechado)',
   averagePrepTime: '25 - 40 min',
@@ -18,7 +18,7 @@ export const RESTAURANT_INFO = {
     lat: -9.9825,
     lng: -67.8285, // Bairro João Eduardo, Rio Branco AC
   },
-  pixKey: '68992277408',
+  pixKey: '68992249224',
   pixBeneficiary: 'VAI DE GRILL SANDUICHES ARTESANAIS LTDA',
 };
 

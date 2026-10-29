@@ -90,7 +90,7 @@ export const FidelidadeModal: React.FC<FidelidadeModalProps> = ({
                     {currentUser?.name || 'Cliente Apaixonado por Burger'}
                   </h3>
                   <span className="text-xs text-zinc-300">
-                    {currentUser?.phone || '(68) 99227-7408'}
+                    {currentUser?.phone || '(68) 99224-9224'}
                   </span>
                 </div>
 

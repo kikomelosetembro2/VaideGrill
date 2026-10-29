@@ -67,7 +67,7 @@ export default function App() {
   // User & Loyalty Points State
   const [currentUser, setCurrentUser] = useState<CustomerInfo | null>({
     name: 'Carlos Oliveira',
-    phone: '(68) 99227-7408',
+    phone: '(68) 99224-9224',
     loyaltyPoints: 185,
   });
   const [loyaltyPoints, setLoyaltyPoints] = useState<number>(185);
@@ -419,7 +419,7 @@ export default function App() {
   const activeOrder = orders.find((o) => o.id === activeOrderId) || orders[0] || null;
 
   return (
-    <div className="min-h-screen bg-[#12080a] text-white flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-[#eab308] selection:text-black">
+    <div className="min-h-screen bg-gradient-to-b from-[#180407] via-[#120305] to-[#0a0102] text-white flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-[#eab308] selection:text-black">
       {/* Floating Push Notification Toasts */}
       <PushNotificationToast
         notifications={notifications}
@@ -482,7 +482,7 @@ export default function App() {
       </main>
 
       {/* Footer with Vai de Grill Info */}
-      <footer className="bg-[#18080c] border-t border-zinc-850 mt-12 py-10 px-4 sm:px-6 text-zinc-300 text-xs">
+      <footer className="bg-[#140305] border-t border-red-950/80 mt-12 py-10 px-4 sm:px-6 text-zinc-300 text-xs">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Logo & description */}
           <div className="space-y-3 md:col-span-2">
