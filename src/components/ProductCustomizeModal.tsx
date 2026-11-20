@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { X, Plus, Minus, Check, Flame, Sparkles, ChefHat } from 'lucide-react';
-import { MenuItem, CustomizationSelection, CartItem } from '../types';
-import { formatCurrency, playSound } from '../utils/helpers';
+import React, { useState } from 'react';
+import { X, Plus, Minus, Flame, Check, MessageSquare } from 'lucide-react';
+import { MenuItem, CartItem, CustomizationSelection } from '../types';
+import { COMMON_EXTRAS } from '../data/menuData';
+import { formatCurrency } from '../utils/helpers';
 
 interface ProductCustomizeModalProps {
   item: MenuItem;
@@ -14,75 +15,63 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
   onClose,
   onAddToCart,
 }) => {
-  const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
-  const [addedExtras, setAddedExtras] = useState<{ [extraId: string]: number }>({});
-  const [meatDoneness, setMeatDoneness] = useState<'mal_passado' | 'ao_ponto' | 'bem_passado'>('ao_ponto');
-  const [specialNotes, setSpecialNotes] = useState('');
-  const [quantity, setQuantity] = useState(1);
+  const extrasCatalog =
+    item.availableExtras && item.availableExtras.length > 0
+      ? item.availableExtras
+      : COMMON_EXTRAS;
 
-  // Toggle ingredient removal
-  const toggleRemoveIngredient = (ingredient: string) => {
-    playSound('ding');
+  const [quantity, setQuantity] = useState(1);
+  const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
+  const [addedExtras, setAddedExtras] = useState<{ [id: string]: number }>({});
+  const [meatDoneness, setMeatDoneness] = useState<
+    'mal_passado' | 'ao_ponto' | 'bem_passado'
+  >('ao_ponto');
+  const [specialNotes, setSpecialNotes] = useState('');
+
+  const toggleRemoveIngredient = (ing: string) => {
     setRemovedIngredients((prev) =>
-      prev.includes(ingredient)
-        ? prev.filter((i) => i !== ingredient)
-        : [...prev, ingredient]
+      prev.includes(ing) ? prev.filter((i) => i !== ing) : [...prev, ing]
     );
   };
 
-  // Add extra
-  const incrementExtra = (extraId: string) => {
-    playSound('ding');
-    setAddedExtras((prev) => ({
-      ...prev,
-      [extraId]: (prev[extraId] || 0) + 1,
-    }));
-  };
-
-  // Decrement extra
-  const decrementExtra = (extraId: string) => {
-    playSound('ding');
+  const updateExtraQty = (extraId: string, delta: number) => {
     setAddedExtras((prev) => {
       const current = prev[extraId] || 0;
-      if (current <= 1) {
-        const next = { ...prev };
-        delete next[extraId];
-        return next;
+      const next = Math.max(0, Math.min(10, current + delta));
+      if (next === 0) {
+        const copy = { ...prev };
+        delete copy[extraId];
+        return copy;
       }
-      return {
-        ...prev,
-        [extraId]: current - 1,
-      };
+      return { ...prev, [extraId]: next };
     });
   };
 
-  // Calculate live unit price
-  const unitPrice = useMemo(() => {
-    let price = item.price;
-    Object.entries(addedExtras).forEach(([extraId, qty]) => {
-      const extraOption = item.availableExtras.find((e) => e.id === extraId);
-      if (extraOption && qty > 0) {
-        price += extraOption.price * qty;
-      }
-    });
-    return price;
-  }, [item, addedExtras]);
+  const extrasUnitTotal = Object.entries(addedExtras).reduce(
+    (sum, [extraId, qty]) => {
+      const found = extrasCatalog.find((e) => e.id === extraId);
+      return sum + (found ? found.price * qty : 0);
+    },
+    0
+  );
 
+  const unitPrice = item.price + extrasUnitTotal;
   const totalPrice = unitPrice * quantity;
 
-  // Handle finalize and add to cart
-  const handleConfirmAddToCart = () => {
-    playSound('success');
+  const handleConfirm = () => {
     const customization: CustomizationSelection = {
       removedIngredients,
       addedExtras,
-      meatDoneness: item.category === 'sanduiches_artesanais' || item.category === 'combos_grill' || item.category === 'especiais_da_grelha' || item.category === 'classicos_da_chapa' ? meatDoneness : undefined,
-      specialNotes: specialNotes.trim() || undefined,
+      ...(item.supportsDoneness ? { meatDoneness } : {}),
+      ...(specialNotes.trim() ? { specialNotes: specialNotes.trim() } : {}),
     };
 
     const cartItem: CartItem = {
-      cartItemId: `${item.id}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      menuItem: item,
+      cartItemId: `${item.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      menuItem: {
+        ...item,
+        availableExtras: extrasCatalog,
+      },
       quantity,
       customization,
       unitPrice,
@@ -93,97 +82,70 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
     onClose();
   };
 
-  const hasDonenessOption = item.category === 'sanduiches_artesanais' || item.category === 'combos_grill' || item.category === 'especiais_da_grelha' || item.category === 'classicos_da_chapa';
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-[#1c0c11] border border-[#eab308]/40 rounded-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
-        {/* Modal Header with Hero Image */}
-        <div className="relative h-48 sm:h-56 w-full overflow-hidden bg-zinc-950 shrink-0">
-          <img
-            src={item.image}
-            alt={item.name}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1c0c11] via-[#1c0c11]/50 to-transparent" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
+      <div className="bg-white border border-neutral-200 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+        {/* Header with image thumbnail */}
+        <div className="flex items-start justify-between gap-4 p-5 border-b border-neutral-200">
+          <div className="flex items-center gap-3.5">
+            <img
+              src={item.image}
+              alt={item.name}
+              className="w-16 h-16 rounded-xl object-cover border border-neutral-200 shrink-0"
+            />
+            <div>
+              <h3 className="font-black text-lg text-[#111111] leading-tight">
+                {item.name}
+              </h3>
+              <p className="text-xs text-neutral-600 mt-0.5">{item.description}</p>
+              <p className="text-sm font-black text-[#8A0000] mt-1 tabular-nums">
+                Base: {formatCurrency(item.price)}
+              </p>
+            </div>
+          </div>
 
-          {/* Close Button */}
           <button
+            type="button"
             onClick={onClose}
-            aria-label="Fechar personalização"
-            className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/70 hover:bg-[#eab308] hover:text-black text-white flex items-center justify-center transition-colors border border-white/20"
+            className="p-2 rounded-lg border border-neutral-200 text-neutral-500 hover:text-[#111111] hover:bg-neutral-100"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
-
-          {/* Title & Base Price on top of gradient */}
-          <div className="absolute bottom-4 left-4 right-4 z-10">
-            {item.badge && (
-              <span className="inline-block bg-[#eab308] text-black text-xs font-black px-2.5 py-0.5 rounded-full mb-1">
-                {item.badge}
-              </span>
-            )}
-            <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
-              {item.name}
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-200 line-clamp-2 mt-1">
-              {item.description}
-            </p>
-          </div>
         </div>
 
-        {/* Scrollable Customization Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-sm">
-          {/* Section: Live Price indicator banner */}
-          <div className="flex items-center justify-between p-3.5 bg-[#290f16] rounded-2xl border border-[#eab308]/30">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#eab308]" />
-              <span className="text-zinc-200 font-bold">Preço Unitário Atualizado:</span>
-            </div>
-            <div className="text-xl font-black text-[#eab308] transition-all duration-300">
-              {formatCurrency(unitPrice)}
-            </div>
-          </div>
-
-          {/* Section 1: Removable Base Ingredients */}
-          {item.removableIngredients.length > 0 && (
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-base font-black text-white flex items-center gap-2">
-                  <ChefHat className="w-4 h-4 text-[#eab308]" />
-                  <span>Ingredientes da Receita Vai de Grill</span>
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  Toque no ingrediente caso deseje <strong className="text-[#facc15]">REMOVER</strong> do seu sanduíche:
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {item.removableIngredients.map((ingredient) => {
-                  const isRemoved = removedIngredients.includes(ingredient);
+        {/* Body */}
+        <div className="p-5 overflow-y-auto space-y-6 flex-1">
+          {/* Doneness selector when supported */}
+          {item.supportsDoneness && (
+            <div className="space-y-2">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
+                <Flame className="w-4 h-4 text-[#8A0000]" />
+                <span>Ponto da Carne</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'mal_passado', label: 'Mal Passado' },
+                  { id: 'ao_ponto', label: 'Ao Ponto' },
+                  { id: 'bem_passado', label: 'Bem Passado' },
+                ].map((opt) => {
+                  const selected = meatDoneness === opt.id;
                   return (
                     <button
-                      key={ingredient}
+                      key={opt.id}
                       type="button"
-                      onClick={() => toggleRemoveIngredient(ingredient)}
-                      className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                        isRemoved
-                          ? 'bg-red-950/60 border-red-500/70 text-red-300 line-through'
-                          : 'bg-[#240e15] border-zinc-800 hover:border-zinc-700 text-zinc-200'
+                      onClick={() =>
+                        setMeatDoneness(
+                          opt.id as 'mal_passado' | 'ao_ponto' | 'bem_passado'
+                        )
+                      }
+                      className={`py-2.5 px-3 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                        selected
+                          ? 'bg-[#111111] text-[#D4A017] border-[#111111]'
+                          : 'bg-white text-neutral-700 border-neutral-300 hover:border-[#111111]'
                       }`}
                     >
-                      <span className="text-xs sm:text-sm font-bold">
-                        {isRemoved ? `Sem ${ingredient}` : ingredient}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-md font-black uppercase ${
-                          isRemoved
-                            ? 'bg-red-600 text-white'
-                            : 'bg-[#18080c] text-zinc-400'
-                        }`}
-                      >
-                        {isRemoved ? 'Removido' : 'Incluído'}
-                      </span>
+                      {opt.label}
                     </button>
                   );
                 })}
@@ -191,164 +153,146 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
             </div>
           )}
 
-          {/* Section 2: Meat Doneness (Ponto da Carne na Brasa) */}
-          {hasDonenessOption && (
+          {/* Removable Accompaniments */}
+          {item.removableIngredients && item.removableIngredients.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-base font-black text-white flex items-center gap-2">
-                <Flame className="w-4 h-4 text-[#eab308]" />
-                <span>Ponto da Carne na Grelha</span>
-              </h3>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'mal_passado', label: 'Mal Passado', desc: 'Centro bem rosado' },
-                  { id: 'ao_ponto', label: 'Ao Ponto ⭐', desc: 'Suculento (Recomendado)' },
-                  { id: 'bem_passado', label: 'Bem Passado', desc: 'Crostinha bem tostadinha' },
-                ].map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => {
-                      playSound('ding');
-                      setMeatDoneness(option.id as any);
-                    }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
-                      meatDoneness === option.id
-                        ? 'bg-[#6b0f1a] border-[#eab308] text-white font-black shadow-md'
-                        : 'bg-[#240e15] border-zinc-800 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="text-xs font-bold">{option.label}</div>
-                    <div className="text-[10px] text-zinc-300 mt-0.5">{option.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Available Extras (Adicionais) */}
-          {item.availableExtras.length > 0 && (
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-base font-black text-white flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-[#eab308]" />
-                  <span>Turbine seu Sanduíche (Adicionais na Brasa)</span>
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  Adicione doses extras de queijo melt, picanha selada, bacon e molhos artesanais:
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                {item.availableExtras.map((extra) => {
-                  const currentQty = addedExtras[extra.id] || 0;
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#111111]">
+                Acompanhamentos (desmarque o que deseja retirar)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {item.removableIngredients.map((ing) => {
+                  const isRemoved = removedIngredients.includes(ing);
                   return (
-                    <div
-                      key={extra.id}
-                      className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                        currentQty > 0
-                          ? 'bg-[#3b121c] border-[#eab308]/60'
-                          : 'bg-[#240e15] border-zinc-800'
+                    <button
+                      key={ing}
+                      type="button"
+                      onClick={() => toggleRemoveIngredient(ing)}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                        isRemoved
+                          ? 'bg-red-50 border-[#8A0000] text-[#8A0000] line-through'
+                          : 'bg-white border-neutral-200 text-[#111111] hover:border-neutral-400'
                       }`}
                     >
-                      <div>
-                        <div className="font-bold text-white text-xs sm:text-sm">
-                          {extra.name}
-                        </div>
-                        <div className="text-xs text-[#eab308] font-black">
-                          +{formatCurrency(extra.price)}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {currentQty > 0 ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => decrementExtra(extra.id)}
-                              className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center font-bold"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="w-5 text-center font-black text-[#eab308] text-sm">
-                              {currentQty}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => incrementExtra(extra.id)}
-                              className="w-7 h-7 rounded-lg bg-[#eab308] hover:bg-[#ca8a04] text-black flex items-center justify-center font-bold"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => incrementExtra(extra.id)}
-                            className="px-3 py-1.5 rounded-lg bg-[#18080c] hover:bg-[#eab308] hover:text-black text-xs font-bold text-zinc-300 transition-colors flex items-center gap-1 border border-zinc-750"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Adicionar</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                      <span>{ing}</span>
+                      {!isRemoved ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 text-[#8A0000]" />
+                      )}
+                    </button>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* Section 4: Special Notes */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
-              Alguma observação especial para a grelha?
+          {/* Adicionais / Extras */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#111111]">
+                Adicionais & Porções Extras
+              </label>
+              {extrasUnitTotal > 0 && (
+                <span className="text-xs font-bold text-[#8A0000] tabular-nums">
+                  +{formatCurrency(extrasUnitTotal)} / un.
+                </span>
+              )}
+            </div>
+
+            <div className="divide-y divide-neutral-200 border border-neutral-200 rounded-xl overflow-hidden">
+              {extrasCatalog.map((extra) => {
+                const qty = addedExtras[extra.id] || 0;
+                return (
+                  <div
+                    key={extra.id}
+                    className={`flex items-center justify-between px-3.5 py-2.5 text-xs ${
+                      qty > 0 ? 'bg-amber-50/70' : 'bg-white'
+                    }`}
+                  >
+                    <div>
+                      <p className="font-bold text-[#111111]">{extra.name}</p>
+                      <p className="text-neutral-600 tabular-nums">
+                        +{formatCurrency(extra.price)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateExtraQty(extra.id, -1)}
+                        disabled={qty === 0}
+                        className="w-7 h-7 rounded-md border border-neutral-300 flex items-center justify-center text-[#111111] disabled:opacity-30 hover:bg-neutral-100 cursor-pointer"
+                        aria-label={`Remover ${extra.name}`}
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-5 text-center font-black text-[#111111] tabular-nums">
+                        {qty}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateExtraQty(extra.id, 1)}
+                        className="w-7 h-7 rounded-md bg-[#111111] text-[#D4A017] flex items-center justify-center hover:bg-neutral-800 cursor-pointer"
+                        aria-label={`Adicionar ${extra.name}`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Kitchen Notes */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-extrabold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-[#D4A017]" />
+              <span>Observações para a Cozinha</span>
             </label>
             <textarea
-              rows={2}
               value={specialNotes}
               onChange={(e) => setSpecialNotes(e.target.value)}
-              placeholder="Ex: Cortar ao meio, mandar maionese de alho-poró separada, caprichar no guardanapo..."
-              className="w-full bg-zinc-900 border border-zinc-750 rounded-xl p-3 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#eab308] transition-colors resize-none"
+              rows={2}
+              placeholder="Ex: Sem cebola, macaxeira bem cozida, mandar talheres..."
+              className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-xs text-[#111111] placeholder:text-neutral-400 focus:outline-none focus:border-[#8A0000]"
             />
           </div>
         </div>
 
-        {/* Modal Sticky Footer with Quantity and Live Total */}
-        <div className="p-4 sm:p-5 bg-[#260f15] border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-          {/* Quantity Controls */}
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
-            <span className="text-xs text-zinc-400 font-bold">Quantidade:</span>
-            <div className="flex items-center gap-2 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                disabled={quantity <= 1}
-                className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-white flex items-center justify-center font-bold"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <span className="w-7 text-center font-black text-white text-base">
-                {quantity}
-              </span>
-              <button
-                type="button"
-                onClick={() => setQuantity((prev) => prev + 1)}
-                className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center font-bold"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+        {/* Footer */}
+        <div className="p-4 border-t border-neutral-200 bg-neutral-50 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 border border-neutral-300 rounded-lg bg-white px-2 py-1">
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              className="p-1.5 text-[#111111] hover:text-[#8A0000] cursor-pointer"
+              aria-label="Diminuir quantidade"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <span className="w-7 text-center font-black text-sm text-[#111111] tabular-nums">
+              {quantity}
+            </span>
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => q + 1)}
+              className="p-1.5 text-[#111111] hover:text-[#8A0000] cursor-pointer"
+              aria-label="Aumentar quantidade"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Add to Cart Button */}
           <button
             type="button"
-            onClick={handleConfirmAddToCart}
-            className="w-full sm:w-auto flex-1 flex items-center justify-center gap-3 bg-gradient-to-r from-[#eab308] to-[#ca8a04] hover:from-[#facc15] hover:to-[#eab308] text-black px-6 py-3.5 rounded-xl font-black text-sm sm:text-base shadow-xl shadow-[#eab308]/30 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            onClick={handleConfirm}
+            className="flex-1 bg-[#8A0000] hover:bg-[#6E0000] text-white font-extrabold py-3 px-5 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer"
           >
-            <span>Adicionar ao Pedido</span>
-            <span>•</span>
-            <span className="text-lg">{formatCurrency(totalPrice)}</span>
+            <span>Adicionar ao Carrinho</span>
+            <span className="tabular-nums text-[#D4A017]">
+              {formatCurrency(totalPrice)}
+            </span>
           </button>
         </div>
       </div>

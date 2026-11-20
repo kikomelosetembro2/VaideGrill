@@ -1,252 +1,254 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  MenuItem, 
-  CartItem, 
-  Order, 
-  OrderStatus, 
-  DeliveryMethod, 
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Phone, Clock, Instagram, Facebook, ShieldCheck } from 'lucide-react';
+import {
+  MenuItem,
+  CartItem,
+  Order,
+  OrderCategory,
   CategoryId,
-  LoyaltyReward,
-  CustomerInfo
 } from './types';
-import { 
-  RESTAURANT_INFO, 
-  MENU_ITEMS, 
-  RIO_BRANCO_NEIGHBORHOODS, 
-  AVAILABLE_COUPONS 
+import {
+  RESTAURANT_INFO,
+  MENU_ITEMS,
+  COMMON_EXTRAS,
+  RIO_BRANCO_NEIGHBORHOODS,
+  AVAILABLE_COUPONS,
+  getOrderStatusLabel,
 } from './data/menuData';
 import { Header } from './components/Header';
-import { BannerCarousel } from './components/BannerCarousel';
+import { HeroSection } from './components/HeroSection';
 import { MenuSection } from './components/MenuSection';
+import { OriginalMenuModal } from './components/OriginalMenuModal';
 import { ProductCustomizeModal } from './components/ProductCustomizeModal';
-import { BuildYourOwnBurger } from './components/BuildYourOwnBurger';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
-import { OrderTrackingModal } from './components/OrderTrackingModal';
-import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
-import { AuthModal } from './components/AuthModal';
-import { AdminPanel } from './components/AdminPanel';
-import { FidelidadeModal } from './components/FidelidadeModal';
-import { ExtrasShopModal } from './components/ExtrasShopModal';
 import { OrderReceiptModal } from './components/OrderReceiptModal';
-import { PushNotificationToast, PushNotificationData } from './components/PushNotificationToast';
-import { BrandHeroHighlight } from './components/BrandHeroHighlight';
-import { VaiDeGrillLogo } from './components/VaiDeGrillLogo';
-import { formatCurrency, playSound } from './utils/helpers';
-import { triggerWhatsAppOrder } from './utils/whatsappReceipt';
-import { 
-  Flame, 
-  Layers, 
-  ChefHat, 
-  Clock, 
-  MapPin, 
-  Phone, 
-  Sparkles, 
-  CheckCircle2, 
-  Bike, 
-  Award,
-  BarChart3
-} from 'lucide-react';
+import { OrderTrackingModal } from './components/OrderTrackingModal';
+import { AdminDashboardModal } from './components/AdminDashboardModal';
+import {
+  PushNotificationToast,
+  PushNotificationData,
+} from './components/PushNotificationToast';
+import { QuioskLogo } from './components/QuioskLogo';
+import { playSound } from './utils/helpers';
+import { triggerWhatsAppKitchenComanda } from './utils/whatsappReceipt';
 
 export default function App() {
-  // Navigation / Modal States
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
+  // Core Store Data from Server
+  const [products, setProducts] = useState<MenuItem[]>(MENU_ITEMS);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+
+  // Admin Bearer Token held strictly in React state memory
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+
+  // UI Navigation & Modal States
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('todos');
+  const [isOriginalMenuOpen, setIsOriginalMenuOpen] = useState(false);
   const [itemToCustomize, setItemToCustomize] = useState<MenuItem | null>(null);
-  const [isBuildBurgerOpen, setIsBuildBurgerOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
-  const [isKdsOpen, setIsKdsOpen] = useState(false);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isFidelidadeOpen, setIsFidelidadeOpen] = useState(false);
-  const [isExtrasShopOpen, setIsExtrasShopOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // User & Loyalty Points State
-  const [currentUser, setCurrentUser] = useState<CustomerInfo | null>({
-    name: 'Carlos Oliveira',
-    phone: '(68) 99224-9224',
-    loyaltyPoints: 185,
-  });
-  const [loyaltyPoints, setLoyaltyPoints] = useState<number>(185);
-
-  // Products state (editable via Admin Panel!)
-  const [products, setProducts] = useState<MenuItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('vaidegrill_products');
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return MENU_ITEMS;
-  });
-
-  // Persist products when edited
-  useEffect(() => {
-    try {
-      localStorage.setItem('vaidegrill_products', JSON.stringify(products));
-    } catch {
-      // ignore
-    }
-  }, [products]);
-
-  // Category and Menu Filter
-  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('todos');
-
-  // Cart State
+  // Shopping Cart States
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('entrega');
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string>(
+  const [orderCategory, setOrderCategory] = useState<OrderCategory>('delivery');
+  const [tableNumber, setTableNumber] = useState('');
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState(
     RIO_BRANCO_NEIGHBORHOODS[0].name
   );
-  const [appliedCoupon, setAppliedCoupon] = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
 
-  // Orders State (synchronized between customer & kitchen)
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 'GRILL-1176',
-      customer: {
-        name: 'Marcos Vinícius',
-        phone: '(68) 99227-1102',
-        address: {
-          street: 'Rua A',
-          number: '1176',
-          neighborhood: 'João Eduardo',
-          city: 'Rio Branco',
-          state: 'Acre',
-          complement: 'Casa 2',
-        },
-      },
-      items: [
-        {
-          cartItemId: 'seed_1',
-          menuItem: MENU_ITEMS[0], // Combo Campeão
-          quantity: 1,
-          customization: {
-            removedIngredients: ['Cebola Crispy Dourada'],
-            addedExtras: { extra_blend_grelha: 1 },
-            meatDoneness: 'ao_ponto',
-            specialNotes: 'Favor enviar maionese de alho-poró bem gelada',
-          },
-          unitPrice: 58.90,
-          totalPrice: 58.90,
-        },
-      ],
-      deliveryMethod: 'entrega',
-      deliveryFee: 3.00,
-      subtotal: 58.90,
-      discount: 0,
-      total: 61.90,
-      paymentMethod: 'pix',
-      paymentStatus: 'aprovado',
-      status: 'em_preparo',
-      createdAt: '19:42',
-      estimatedDeliveryTime: '20 - 30 min',
-    },
-    {
-      id: 'GRILL-1175',
-      customer: {
-        name: 'Fernanda Albuquerque',
-        phone: '(68) 99227-4491',
-      },
-      items: [
-        {
-          cartItemId: 'seed_2',
-          menuItem: MENU_ITEMS[2], // Vai de Picanha
-          quantity: 2,
-          customization: {
-            removedIngredients: [],
-            addedExtras: { extra_bacon_artesanal: 1 },
-            meatDoneness: 'ao_ponto',
-          },
-          unitPrice: 43.40,
-          totalPrice: 86.80,
-        },
-      ],
-      deliveryMethod: 'retirada',
-      deliveryFee: 0,
-      subtotal: 86.80,
-      discount: 8.68,
-      couponCode: 'VAIDEGRILL10',
-      total: 78.12,
-      paymentMethod: 'cartao_credito',
-      paymentStatus: 'aprovado',
-      status: 'recebido',
-      createdAt: '19:50',
-      estimatedDeliveryTime: '15 - 20 min',
-    },
-  ]);
-
-  // Active customer tracking order
-  const [activeOrderId, setActiveOrderId] = useState<string | null>('GRILL-1176');
-
-  // Push notifications state
+  // Notifications state & ref to detect newly ready orders during polling
   const [notifications, setNotifications] = useState<PushNotificationData[]>([]);
+  const knownStatusesRef = useRef<Record<string, string>>({});
 
-  // Calculate cart financials
-  const cartSubtotal = cartItems.reduce((acc, item) => acc + item.totalPrice, 0);
+  const emitNotification = useCallback(
+    (
+      title: string,
+      message: string,
+      status: Order['status'],
+      orderId: string,
+      soundType: 'ding' | 'success' | 'alert' = 'ding'
+    ) => {
+      const notif: PushNotificationData = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        title,
+        message,
+        status,
+        orderId,
+        timestamp: new Date().toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
 
-  const selectedNeighborhoodObj = RIO_BRANCO_NEIGHBORHOODS.find(
+      setNotifications((prev) => [notif, ...prev.slice(0, 3)]);
+      playSound(soundType);
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(title, { body: message });
+        } catch {
+          // ignore
+        }
+      }
+    },
+    []
+  );
+
+  // Fetch products once on mount
+  useEffect(() => {
+    fetch('/api/products')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.products) && data.products.length > 0) {
+          setProducts(
+            data.products.map((p: MenuItem) => ({
+              ...p,
+              availableExtras:
+                p.availableExtras && p.availableExtras.length > 0
+                  ? p.availableExtras
+                  : COMMON_EXTRAS,
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        // Fallback to static MENU_ITEMS if server not reachable yet
+      });
+  }, []);
+
+  // Fetch & poll orders to detect live status transitions + customer ready alerts
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!Array.isArray(data.orders)) return;
+
+      const incoming: Order[] = data.orders;
+      setOrders(incoming);
+      setActiveOrderId((curr) => curr || incoming[0]?.id || null);
+
+      // Detect status changes compared to known state
+      const prevMap = knownStatusesRef.current;
+      const hasInitialized = Object.keys(prevMap).length > 0;
+
+      if (hasInitialized) {
+        incoming.forEach((ord) => {
+          const prevStatus = prevMap[ord.id];
+          const prevReady = prevMap[`${ord.id}_ready`];
+          const currReady = ord.readyNotifiedAt || '';
+
+          if (
+            (prevStatus && prevStatus !== ord.status) ||
+            (currReady && currReady !== prevReady)
+          ) {
+            const label = getOrderStatusLabel(ord.status);
+            const isReady =
+              Boolean(ord.readyNotifiedAt) ||
+              ord.status === 'pedido_mesa' ||
+              ord.status === 'pedido_delivery' ||
+              ord.status === 'pedido_entrega';
+
+            emitNotification(
+              isReady
+                ? `Pedido ${ord.id} Pronto!`
+                : `Comanda ${ord.id}: ${label}`,
+              `${ord.customer.name}, o status do seu pedido mudou para "${label}".`,
+              ord.status,
+              ord.id,
+              isReady ? 'success' : 'ding'
+            );
+          }
+        });
+      }
+
+      const nextMap: Record<string, string> = {};
+      incoming.forEach((ord) => {
+        nextMap[ord.id] = ord.status;
+        nextMap[`${ord.id}_ready`] = ord.readyNotifiedAt || '';
+      });
+      knownStatusesRef.current = nextMap;
+    } catch {
+      // ignore transient network errors
+    }
+  }, [emitNotification]);
+
+  useEffect(() => {
+    fetchOrders();
+    const timer = setInterval(fetchOrders, 5000);
+    return () => clearInterval(timer);
+  }, [fetchOrders]);
+
+  // Cart Financial Calculations
+  const cartSubtotal = cartItems.reduce((acc, i) => acc + i.totalPrice, 0);
+  const neighborhoodObj = RIO_BRANCO_NEIGHBORHOODS.find(
     (n) => n.name === selectedNeighborhood
   );
-  const deliveryFee = deliveryMethod === 'entrega' ? (selectedNeighborhoodObj?.fee || 4.0) : 0;
+  const deliveryFee =
+    orderCategory === 'delivery' ? neighborhoodObj?.fee || 6.0 : 0;
 
-  // Coupon calculations
   let discountAmount = 0;
   if (appliedCoupon && AVAILABLE_COUPONS[appliedCoupon]) {
-    const couponInfo = AVAILABLE_COUPONS[appliedCoupon];
-    if (cartSubtotal >= couponInfo.minOrder) {
-      if (couponInfo.discountPercent) {
-        discountAmount = (cartSubtotal * couponInfo.discountPercent) / 100;
-      } else if (couponInfo.discountFixed) {
-        discountAmount = couponInfo.discountFixed;
-      }
+    const info = AVAILABLE_COUPONS[appliedCoupon];
+    if (cartSubtotal >= info.minOrder) {
+      discountAmount = info.discountPercent
+        ? (cartSubtotal * info.discountPercent) / 100
+        : info.discountFixed || 0;
     }
   }
 
   const cartTotal = Math.max(0, cartSubtotal + deliveryFee - discountAmount);
-  const cartItemCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const cartItemCount = cartItems.reduce((acc, i) => acc + i.quantity, 0);
 
-  // Cart operations
-  const handleAddToCart = (newItem: CartItem) => {
+  // Cart Actions
+  const handleAddToCart = (cartItem: CartItem) => {
     playSound('success');
-    setCartItems((prev) => [...prev, newItem]);
+    setCartItems((prev) => [...prev, cartItem]);
     setIsCartOpen(true);
   };
 
   const handleQuickAddToCart = (item: MenuItem) => {
     playSound('success');
-    const quickCartItem: CartItem = {
-      cartItemId: `${item.id}_${Date.now()}`,
-      menuItem: item,
+    const quick: CartItem = {
+      cartItemId: `${item.id}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      menuItem: {
+        ...item,
+        availableExtras:
+          item.availableExtras && item.availableExtras.length > 0
+            ? item.availableExtras
+            : COMMON_EXTRAS,
+      },
       quantity: 1,
       customization: {
         removedIngredients: [],
         addedExtras: {},
-        meatDoneness: 'ao_ponto',
+        ...(item.supportsDoneness ? { meatDoneness: 'ao_ponto' } : {}),
       },
       unitPrice: item.price,
       totalPrice: item.price,
     };
-    setCartItems((prev) => [...prev, quickCartItem]);
+    setCartItems((prev) => [...prev, quick]);
     setIsCartOpen(true);
   };
 
   const handleUpdateQuantity = (cartItemId: string, newQty: number) => {
-    playSound('ding');
     if (newQty <= 0) {
       setCartItems((prev) => prev.filter((i) => i.cartItemId !== cartItemId));
-    } else {
-      setCartItems((prev) =>
-        prev.map((i) =>
-          i.cartItemId === cartItemId
-            ? { ...i, quantity: newQty, totalPrice: i.unitPrice * newQty }
-            : i
-        )
-      );
+      return;
     }
+    setCartItems((prev) =>
+      prev.map((i) =>
+        i.cartItemId === cartItemId
+          ? { ...i, quantity: newQty, totalPrice: i.unitPrice * newQty }
+          : i
+      )
+    );
   };
 
   const handleRemoveItem = (cartItemId: string) => {
@@ -255,363 +257,184 @@ export default function App() {
 
   const handleApplyCoupon = (code: string): boolean => {
     const coupon = AVAILABLE_COUPONS[code];
-    if (!coupon) return false;
-    if (cartSubtotal < coupon.minOrder) return false;
+    if (!coupon || cartSubtotal < coupon.minOrder) return false;
     setAppliedCoupon(code);
     return true;
   };
 
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon('');
-  };
-
-  // Push notification dispatcher
-  const emitPushNotification = (
-    title: string,
-    message: string,
-    status: OrderStatus,
-    orderId: string
-  ) => {
-    const newNotif: PushNotificationData = {
-      id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      title,
-      message,
-      status,
-      orderId,
-      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setNotifications((prev) => [newNotif, ...prev.slice(0, 4)]);
-    playSound('ding');
-
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(title, {
-          body: message,
-          icon: '/favicon.svg',
-        });
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  // Handle Order Created
+  // Order Created Callback: Auto-trigger kitchen WhatsApp comanda & show receipt
   const handleOrderCreated = (newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
+    knownStatusesRef.current[newOrder.id] = newOrder.status;
     setActiveOrderId(newOrder.id);
     setSelectedReceiptOrder(newOrder);
     setCartItems([]);
     setAppliedCoupon('');
-    setIsTrackingOpen(true);
     setIsReceiptModalOpen(true);
 
-    // Gatilho: Dispara automaticamente o link wa.me para o WhatsApp da Lanchonete Vai de Grill
-    triggerWhatsAppOrder(newOrder);
+    // Send Kitchen Comanda via WhatsApp automatically
+    triggerWhatsAppKitchenComanda(newOrder);
 
-    // Increase Loyalty Points
-    const earned = Math.floor(newOrder.total);
-    setLoyaltyPoints((prev) => prev + earned);
-
-    // Update salesCount of items in products list
-    setProducts((prev) =>
-      prev.map((p) => {
-        const orderItem = newOrder.items.find((it) => it.menuItem.id === p.id);
-        if (orderItem) {
-          return { ...p, salesCount: (p.salesCount || 0) + orderItem.quantity };
-        }
-        return p;
-      })
-    );
-
-    emitPushNotification(
-      'Pedido Recebido!',
-      `Seu pedido #${newOrder.id} foi recebido pela Lanchonete Vai de Grill e encaminhado para a brasa.`,
-      'recebido',
-      newOrder.id
+    emitNotification(
+      `Comanda ${newOrder.id} Aceita!`,
+      `Seu pedido foi numerado como ${newOrder.id} e encaminhado à cozinha do Quiosk da Preta.`,
+      newOrder.status,
+      newOrder.id,
+      'success'
     );
   };
 
-  // Handle Order Status Update
-  const handleUpdateOrderStatus = (orderId: string, nextStatus: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
-    );
-
-    let title = 'Atualização do Pedido';
-    let message = `O status do seu pedido #${orderId} foi atualizado para ${nextStatus}.`;
-
-    if (nextStatus === 'em_preparo') {
-      title = '🔥 Na Grelha & Em Preparo!';
-      message = `O churrasqueiro da Lanchonete Vai de Grill está assando seu sanduíche na brasa!`;
-    } else if (nextStatus === 'pronto') {
-      title = '📦 Sanduíche Pronto!';
-      message = `Seu pedido #${orderId} está embalado e quentinho aguardando saída do motoboy!`;
-    } else if (nextStatus === 'saiu_para_entrega') {
-      title = '🛵 Motoboy em Rota!';
-      message = `O entregador da Vai de Grill acabou de sair da Rua A, 1176 com seu pedido!`;
-    } else if (nextStatus === 'entregue') {
-      title = '🎉 Pedido Entregue!';
-      message = `Bom apetite! Agradecemos a preferência na Lanchonete Vai de Grill no João Eduardo.`;
-    }
-
-    emitPushNotification(title, message, nextStatus, orderId);
+  const handleUpdateOrderStatusLocal = (updated: Order) => {
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    knownStatusesRef.current[updated.id] = updated.status;
+    knownStatusesRef.current[`${updated.id}_ready`] =
+      updated.readyNotifiedAt || '';
   };
 
-  // Admin CRUD handlers
-  const handleAddProduct = (newProduct: MenuItem) => {
-    setProducts((prev) => [newProduct, ...prev]);
-  };
-
-  const handleUpdateProduct = (updatedProduct: MenuItem) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
+  const handleNotifyCustomerReady = (order: Order) => {
+    emitNotification(
+      `Pedido ${order.id} PRONTO!`,
+      `${order.customer.name}, seu pedido está pronto! Notificação enviada para ${order.customer.phone}.`,
+      order.status,
+      order.id,
+      'success'
     );
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+  const activeOrder =
+    orders.find((o) => o.id === activeOrderId) || orders[0] || null;
+
+  const scrollToMenu = () => {
+    const el = document.getElementById('cardapio');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
-
-  // Loyalty reward redemption
-  const handleRedeemLoyaltyReward = (reward: LoyaltyReward) => {
-    if (loyaltyPoints < reward.pointsCost) return;
-
-    setLoyaltyPoints((prev) => prev - reward.pointsCost);
-
-    if (reward.type === 'discount_fixed' && reward.discountValue) {
-      // apply as special coupon
-      setAppliedCoupon('GRILLVIP');
-      playSound('success');
-      alert(`🎉 Recompensa resgatada! Desconto de ${formatCurrency(reward.discountValue)} aplicado no carrinho.`);
-      setIsCartOpen(true);
-    } else {
-      // Add free item to cart
-      const freeItem: CartItem = {
-        cartItemId: `reward_${Date.now()}`,
-        menuItem: {
-          id: reward.id,
-          name: `🎁 [BRINDE VIP] ${reward.title}`,
-          category: 'porcoes_e_petiscos',
-          description: reward.description,
-          price: 0,
-          image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=800&q=80',
-          badge: 'Brinde Fidelidade',
-          prepTimeMinutes: 10,
-          defaultIngredients: [reward.title],
-          removableIngredients: [],
-          availableExtras: [],
-        },
-        quantity: 1,
-        customization: {
-          removedIngredients: [],
-          addedExtras: {},
-        },
-        unitPrice: 0,
-        totalPrice: 0,
-        isLoyaltyReward: true,
-      };
-      setCartItems((prev) => [...prev, freeItem]);
-      setIsCartOpen(true);
-    }
-  };
-
-  const activeOrder = orders.find((o) => o.id === activeOrderId) || orders[0] || null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#180407] via-[#120305] to-[#0a0102] text-white flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-[#eab308] selection:text-black">
-      {/* Floating Push Notification Toasts */}
+    <div className="min-h-screen bg-white text-[#111111] flex flex-col">
+      {/* Live Push & Sound Notifications */}
       <PushNotificationToast
         notifications={notifications}
-        onDismiss={(id) => setNotifications((prev) => prev.filter((n) => n.id !== id))}
+        onDismiss={(id) =>
+          setNotifications((prev) => prev.filter((n) => n.id !== id))
+        }
         onOpenOrderTracking={(ordId) => {
           setActiveOrderId(ordId);
           setIsTrackingOpen(true);
         }}
       />
 
-      {/* Main Header */}
+      {/* Sticky 3-Zone Header with Quiosk da Preta Logo */}
       <Header
         cartItemCount={cartItemCount}
         cartTotal={cartTotal}
-        loyaltyPoints={loyaltyPoints}
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenBuildBurger={() => setIsBuildBurgerOpen(true)}
-        onOpenExtrasShop={() => setIsExtrasShopOpen(true)}
-        onOpenAuth={() => setIsAuthOpen(true)}
-        onOpenAdminPanel={() => setIsAdminOpen(true)}
-        onOpenFidelidade={() => setIsFidelidadeOpen(true)}
-        onToggleKDS={() => setIsKdsOpen(true)}
         activeOrder={activeOrder}
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenOriginalMenu={() => setIsOriginalMenuOpen(true)}
         onOpenTracking={() => setIsTrackingOpen(true)}
-        isKdsActive={isKdsOpen}
-        currentUser={currentUser}
+        onOpenAdminPanel={() => setIsAdminOpen(true)}
+        onScrollToMenu={scrollToMenu}
       />
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full space-y-8">
-        {/* Destaque Centralizado: Nome Lanchonete Vai de Grill com Logo do Lado Esquerdo */}
-        <BrandHeroHighlight
-          onOpenBuildBurger={() => setIsBuildBurgerOpen(true)}
-          onOpenExtrasShop={() => setIsExtrasShopOpen(true)}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-10">
+        <HeroSection
+          onExploreMenu={scrollToMenu}
+          onOpenOriginalMenu={() => setIsOriginalMenuOpen(true)}
+          onOpenTracking={() => setIsTrackingOpen(true)}
         />
 
-        {/* Banner Carousel with Combos, Custom Burger, and Loyalty Points */}
-        <BannerCarousel
-          onOpenBuildBurger={() => setIsBuildBurgerOpen(true)}
-          onSelectCategory={(cat) => setSelectedCategory(cat)}
-          onApplyCouponCode={(code) => {
-            setAppliedCoupon(code);
-            setIsCartOpen(true);
-          }}
-          onOpenFidelidade={() => setIsFidelidadeOpen(true)}
-        />
-
-        {/* Dynamic Menu & Search Section */}
         <MenuSection
           products={products}
-          onSelectItemToCustomize={(item) => {
-            setItemToCustomize(item);
-            setIsCustomizeModalOpen(true);
-          }}
-          onQuickAddToCart={handleQuickAddToCart}
-          onOpenBuildBurger={() => setIsBuildBurgerOpen(true)}
           selectedCategory={selectedCategory}
-          onSelectCategory={(cat) => setSelectedCategory(cat)}
+          onSelectCategory={setSelectedCategory}
+          onSelectItemToCustomize={(item) => setItemToCustomize(item)}
+          onQuickAddToCart={handleQuickAddToCart}
         />
       </main>
 
-      {/* Footer with Vai de Grill Info */}
-      <footer className="bg-[#140305] border-t border-red-950/80 mt-12 py-10 px-4 sm:px-6 text-zinc-300 text-xs">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Logo & description */}
-          <div className="space-y-3 md:col-span-2">
-            <VaiDeGrillLogo size="md" />
-            <p className="text-zinc-300 max-w-md leading-relaxed text-xs">
-              O verdadeiro sabor do sanduíche artesanal na brasa de Rio Branco, Acre. Pães selados com manteiga, carnes nobres grelhadas com crosta suculenta e molhos caseiros da casa.
+      {/* Clean Light Footer */}
+      <footer className="border-t border-neutral-200 bg-neutral-50 mt-12 py-10 px-4 sm:px-6 text-xs text-neutral-600">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="space-y-3">
+            <QuioskLogo size="sm" showTagline />
+            <p className="text-neutral-600 leading-relaxed max-w-sm">
+              Cardápio digital oficial do {RESTAURANT_INFO.name}. Espetinhos na brasa,
+              tira-gosto na chapa, pratos árabes, rabada no tucupí e bebidas geladas.
             </p>
-            <div className="pt-1 flex items-center gap-2 text-zinc-200">
-              <MapPin className="w-4 h-4 text-[#eab308]" />
-              <span>{RESTAURANT_INFO.address} - Rio Branco, AC</span>
-            </div>
           </div>
 
-          {/* Opening Hours & Contact */}
           <div className="space-y-2">
-            <h4 className="font-extrabold text-[#eab308] text-xs uppercase tracking-wider">
-              Horário & Delivery
+            <h4 className="font-extrabold uppercase tracking-wider text-[#111111]">
+              Horário & Atendimento
             </h4>
-            <div className="text-zinc-300 space-y-1 font-medium">
-              <p>Terça a Domingo: 18:00 às 23:00</p>
-              <p className="text-zinc-500">Segunda-feira: Fechado para descanso</p>
-            </div>
-            <div className="pt-2">
-              <a
-                href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white hover:text-[#eab308] font-black underline flex items-center gap-1.5 transition-colors"
-              >
-                <Phone className="w-3.5 h-3.5 text-[#eab308]" />
-                <span>{RESTAURANT_INFO.phone}</span>
-              </a>
-            </div>
+            <p className="flex items-center gap-2 font-semibold text-neutral-700">
+              <Clock className="w-4 h-4 text-[#D4A017]" />
+              <span>{RESTAURANT_INFO.openingHours}</span>
+            </p>
+            <a
+              href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 font-bold text-[#8A0000] hover:underline tabular-nums"
+            >
+              <Phone className="w-4 h-4" />
+              <span>WhatsApp: {RESTAURANT_INFO.phone}</span>
+            </a>
           </div>
 
-          {/* Quick links */}
           <div className="space-y-2">
-            <h4 className="font-extrabold text-[#eab308] text-xs uppercase tracking-wider">
-              Atalhos Rápidos
+            <h4 className="font-extrabold uppercase tracking-wider text-[#111111]">
+              Redes & Gestão
             </h4>
-            <ul className="space-y-2 text-zinc-300 font-semibold">
-              <li>
-                <button
-                  onClick={() => setIsAdminOpen(true)}
-                  className="hover:text-[#eab308] flex items-center gap-1.5 transition-colors"
-                >
-                  <BarChart3 className="w-3.5 h-3.5 text-[#eab308]" />
-                  <span>Painel Administrativo & Relatório</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setIsFidelidadeOpen(true)}
-                  className="hover:text-[#eab308] flex items-center gap-1.5 transition-colors"
-                >
-                  <Award className="w-3.5 h-3.5 text-[#eab308]" />
-                  <span>Clube de Fidelidade ({loyaltyPoints} pts)</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setIsKdsOpen(true)}
-                  className="hover:text-[#eab308] flex items-center gap-1.5 transition-colors"
-                >
-                  <ChefHat className="w-3.5 h-3.5 text-[#eab308]" />
-                  <span>Painel da Cozinha KDS</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setIsBuildBurgerOpen(true)}
-                  className="hover:text-[#eab308] flex items-center gap-1.5 transition-colors"
-                >
-                  <Layers className="w-3.5 h-3.5 text-[#eab308]" />
-                  <span>Monte seu Sanduíche do Zero</span>
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto pt-8 mt-8 border-t border-zinc-850 flex flex-col sm:flex-row items-center justify-between gap-3 text-zinc-400 text-[11px]">
-          <div>
-            © {new Date().getFullYear()} {RESTAURANT_INFO.name}. Todos os direitos reservados.
-          </div>
-          <div className="flex items-center gap-4">
-            <span>Bairro João Eduardo • Rio Branco - Acre</span>
-            <span>•</span>
-            <span>Chave Pix: {RESTAURANT_INFO.phone}</span>
+            <p className="flex items-center gap-2 font-medium">
+              <Instagram className="w-4 h-4 text-[#8A0000]" />
+              <span>{RESTAURANT_INFO.instagram}</span>
+            </p>
+            <p className="flex items-center gap-2 font-medium">
+              <Facebook className="w-4 h-4 text-[#111111]" />
+              <span>Facebook: {RESTAURANT_INFO.facebook}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsAdminOpen(true)}
+              className="mt-1 inline-flex items-center gap-1.5 font-bold text-[#111111] hover:text-[#8A0000] cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4 text-[#D4A017]" />
+              <span>Acessar Painel Administrativo</span>
+            </button>
           </div>
         </div>
       </footer>
 
-      {/* MODALS */}
+      {/* Modals */}
+      <OriginalMenuModal
+        isOpen={isOriginalMenuOpen}
+        onClose={() => setIsOriginalMenuOpen(false)}
+      />
 
-      {/* 1. Critical Product Customization Screen */}
-      {isCustomizeModalOpen && itemToCustomize && (
+      {itemToCustomize && (
         <ProductCustomizeModal
           item={itemToCustomize}
-          onClose={() => {
-            setIsCustomizeModalOpen(false);
-            setItemToCustomize(null);
-          }}
+          onClose={() => setItemToCustomize(null)}
           onAddToCart={handleAddToCart}
         />
       )}
 
-      {/* 2. Step-by-Step Custom Burger Builder */}
-      {isBuildBurgerOpen && (
-        <BuildYourOwnBurger
-          onClose={() => setIsBuildBurgerOpen(false)}
-          onAddToCart={handleAddToCart}
-        />
-      )}
-
-      {/* 3. Cart Drawer with Delivery Selection & Loyalty Points */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         items={cartItems}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
-        deliveryMethod={deliveryMethod}
-        onChangeDeliveryMethod={setDeliveryMethod}
+        orderCategory={orderCategory}
+        onChangeOrderCategory={setOrderCategory}
+        tableNumber={tableNumber}
+        onChangeTableNumber={setTableNumber}
         selectedNeighborhood={selectedNeighborhood}
         onSelectNeighborhood={setSelectedNeighborhood}
         appliedCoupon={appliedCoupon}
         onApplyCoupon={handleApplyCoupon}
-        onRemoveCoupon={handleRemoveCoupon}
+        onRemoveCoupon={() => setAppliedCoupon('')}
         subtotal={cartSubtotal}
         deliveryFee={deliveryFee}
         discountAmount={discountAmount}
@@ -620,93 +443,25 @@ export default function App() {
           setIsCartOpen(false);
           setIsCheckoutOpen(true);
         }}
-        onOpenExtrasShop={() => {
-          setIsCartOpen(false);
-          setIsExtrasShopOpen(true);
-        }}
       />
 
-      {/* 4. Checkout Modal with Pix QR Code, Credit Card & Addresses */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
         items={cartItems}
-        deliveryMethod={deliveryMethod}
+        orderCategory={orderCategory}
+        onChangeOrderCategory={setOrderCategory}
+        tableNumber={tableNumber}
+        onChangeTableNumber={setTableNumber}
         selectedNeighborhood={selectedNeighborhood}
         deliveryFee={deliveryFee}
         subtotal={cartSubtotal}
         discountAmount={discountAmount}
         couponCode={appliedCoupon || undefined}
         total={cartTotal}
-        currentUser={currentUser}
         onOrderCreated={handleOrderCreated}
       />
 
-      {/* 5. Real-Time Order Tracking Modal with Map from João Eduardo */}
-      {isTrackingOpen && activeOrder && (
-        <OrderTrackingModal
-          order={activeOrder}
-          onClose={() => setIsTrackingOpen(false)}
-          onUpdateStatus={handleUpdateOrderStatus}
-          onOpenReceiptModal={() => {
-            setSelectedReceiptOrder(activeOrder);
-            setIsReceiptModalOpen(true);
-          }}
-        />
-      )}
-
-      {/* 6. Kitchen Display System (KDS & Order Manager) */}
-      {isKdsOpen && (
-        <KitchenDisplaySystem
-          orders={orders}
-          onUpdateOrderStatus={handleUpdateOrderStatus}
-          onClose={() => setIsKdsOpen(false)}
-        />
-      )}
-
-      {/* 7. Auth Modal */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(usr) => {
-          setCurrentUser((prev) => ({
-            ...prev,
-            name: usr.name,
-            phone: usr.phone,
-          }));
-        }}
-      />
-
-      {/* 8. Admin Panel (Dashboard Mais Vendidos + CRUD com Upload JPG) */}
-      {isAdminOpen && (
-        <AdminPanel
-          products={products}
-          onAddProduct={handleAddProduct}
-          onUpdateProduct={handleUpdateProduct}
-          onDeleteProduct={handleDeleteProduct}
-          onClose={() => setIsAdminOpen(false)}
-        />
-      )}
-
-      {/* 9. Loyalty Club Modal (Pontuação & Resgate de Recompensas) */}
-      {isFidelidadeOpen && (
-        <FidelidadeModal
-          isOpen={isFidelidadeOpen}
-          onClose={() => setIsFidelidadeOpen(false)}
-          currentUser={currentUser}
-          currentPoints={loyaltyPoints}
-          onRedeemReward={handleRedeemLoyaltyReward}
-        />
-      )}
-
-      {/* 10. Dedicated Extras & Add-ons Shop Modal */}
-      <ExtrasShopModal
-        isOpen={isExtrasShopOpen}
-        onClose={() => setIsExtrasShopOpen(false)}
-        onAddExtraToCart={handleAddToCart}
-      />
-
-      {/* 11. Kitchen Voucher & WhatsApp Order Receipt Modal */}
       <OrderReceiptModal
         order={selectedReceiptOrder || activeOrder}
         isOpen={isReceiptModalOpen}
@@ -715,6 +470,36 @@ export default function App() {
           setIsReceiptModalOpen(false);
           setIsTrackingOpen(true);
         }}
+      />
+
+      {isTrackingOpen && activeOrder && (
+        <OrderTrackingModal
+          order={activeOrder}
+          orders={orders}
+          onSelectOrder={(id) => setActiveOrderId(id)}
+          onClose={() => setIsTrackingOpen(false)}
+          onOpenReceiptModal={() => {
+            setSelectedReceiptOrder(activeOrder);
+            setIsReceiptModalOpen(true);
+          }}
+        />
+      )}
+
+      <AdminDashboardModal
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+        adminToken={adminToken}
+        onSetAdminToken={setAdminToken}
+        orders={orders}
+        onRefreshOrders={fetchOrders}
+        onUpdateOrderStatusLocal={handleUpdateOrderStatusLocal}
+        onNotifyCustomerReady={handleNotifyCustomerReady}
+        onOpenReceiptModal={(ord) => {
+          setSelectedReceiptOrder(ord);
+          setIsReceiptModalOpen(true);
+        }}
+        products={products}
+        onProductsChanged={setProducts}
       />
     </div>
   );

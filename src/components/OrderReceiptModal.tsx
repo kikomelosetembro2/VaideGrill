@@ -1,30 +1,32 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  MessageCircle, 
-  Copy, 
-  Check, 
-  Printer, 
-  Share2, 
-  CheckCircle2, 
-  Flame, 
-  MapPin, 
-  Phone, 
-  Store, 
-  Bike,
-  Sparkles
+import {
+  X,
+  MessageCircle,
+  Printer,
+  Copy,
+  Check,
+  Navigation,
+  ReceiptText,
 } from 'lucide-react';
 import { Order } from '../types';
-import { RESTAURANT_INFO } from '../data/menuData';
-import { generateWhatsAppReceipt, openWhatsAppOrder } from '../utils/whatsappReceipt';
-import { formatCurrency, playSound } from '../utils/helpers';
-import { VaiDeGrillLogo } from './VaiDeGrillLogo';
+import {
+  RESTAURANT_INFO,
+  COMMON_EXTRAS,
+  ORDER_STATUS_LIST,
+  ORDER_CATEGORY_LABELS,
+} from '../data/menuData';
+import {
+  formatKitchenComandaWhatsApp,
+  triggerWhatsAppKitchenComanda,
+} from '../utils/whatsappReceipt';
+import { formatCurrency } from '../utils/helpers';
+import { QuioskLogo } from './QuioskLogo';
 
 interface OrderReceiptModalProps {
   order: Order | null;
   isOpen: boolean;
   onClose: () => void;
-  onOpenTracking?: () => void;
+  onOpenTracking: () => void;
 }
 
 export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
@@ -37,258 +39,230 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
 
   if (!isOpen || !order) return null;
 
-  const receiptRawText = generateWhatsAppReceipt(order);
+  const statusInfo =
+    ORDER_STATUS_LIST.find((s) => s.id === order.status) || ORDER_STATUS_LIST[0];
+  const categoryInfo = ORDER_CATEGORY_LABELS[order.orderCategory];
 
   const handleCopy = () => {
-    playSound('ding');
-    navigator.clipboard.writeText(receiptRawText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
-  };
-
-  const handleSendToWhatsApp = () => {
-    playSound('success');
-    openWhatsAppOrder(order);
+    try {
+      navigator.clipboard.writeText(formatKitchenComandaWhatsApp(order));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // ignore
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-[#1c0c11] border border-[#eab308]/50 rounded-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
+      <div className="bg-white border border-neutral-200 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="p-4 sm:p-5 bg-[#260f15] border-b border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#25D366] text-black flex items-center justify-center font-black shadow-lg">
-              <MessageCircle className="w-6 h-6 fill-black" />
-            </div>
+        <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between no-print">
+          <div className="flex items-center gap-2.5">
+            <ReceiptText className="w-5 h-5 text-[#8A0000]" />
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-white">
-                  Comprovante para a Cozinha (WhatsApp)
-                </h2>
-                <span className="bg-[#eab308] text-black text-[10px] font-black px-2 py-0.5 rounded">
-                  Pedido #{order.id}
-                </span>
-              </div>
-              <p className="text-xs text-zinc-300">
-                Envie o comprovante direto para a produção da Lanchonete Vai de Grill!
+              <h2 className="font-black text-base text-[#111111]">
+                Comanda da Cozinha {order.id}
+              </h2>
+              <p className="text-xs text-neutral-500">
+                Numeração automática #{order.orderNumber} · {categoryInfo.label}
               </p>
             </div>
           </div>
-
           <button
+            type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-zinc-900 hover:bg-[#6b0f1a] text-white flex items-center justify-center transition-colors"
+            className="p-2 rounded-lg border border-neutral-200 text-neutral-500 hover:text-[#111111]"
+            aria-label="Fechar comanda"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* WhatsApp Callout Action Banner */}
-        <div className="bg-gradient-to-r from-[#128C7E] to-[#25D366] text-black p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-lg">
-          <div className="flex items-center gap-3 text-center sm:text-left">
-            <MessageCircle className="w-6 h-6 fill-black shrink-0" />
-            <div>
-              <span className="font-black text-xs uppercase tracking-wider block">
-                Envio Imediato para a Cozinha
-              </span>
-              <p className="text-xs font-bold text-black/90">
-                Ao clicar abaixo, o WhatsApp abrirá com o pedido pré-formatado para o telefone <strong>(68) 99224-9224</strong>.
+        {/* Printable Comanda Body */}
+        <div className="flex-1 overflow-y-auto p-5 bg-neutral-50">
+          <div className="bg-white border border-neutral-300 rounded-xl p-5 space-y-4 font-mono text-xs text-[#111111]">
+            <div className="flex items-center justify-between border-b border-dashed border-neutral-300 pb-3">
+              <QuioskLogo size="sm" />
+              <div className="text-right">
+                <p className="font-black text-base text-[#8A0000] tabular-nums">
+                  {order.id}
+                </p>
+                <p className="text-[11px] text-neutral-500 tabular-nums">
+                  {order.createdAt}
+                </p>
+              </div>
+            </div>
+
+            {/* Category & Status Position on Comanda */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-b border-dashed border-neutral-300 pb-3">
+              <div className="p-2.5 rounded-lg bg-neutral-100 border border-neutral-200">
+                <p className="text-[10px] uppercase text-neutral-500 font-bold">
+                  Categoria do Pedido
+                </p>
+                <p className="font-black text-xs text-[#111111]">
+                  {categoryInfo.label}
+                  {order.orderCategory === 'mesa' && order.tableNumber
+                    ? ` · Mesa ${order.tableNumber}`
+                    : ''}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-[#D4A017]">
+                <p className="text-[10px] uppercase text-neutral-600 font-bold">
+                  Status na Comanda
+                </p>
+                <p className="font-black text-xs text-[#8A0000]">
+                  {statusInfo.label}
+                </p>
+              </div>
+            </div>
+
+            {/* Customer Info */}
+            <div className="space-y-1 border-b border-dashed border-neutral-300 pb-3">
+              <p className="font-bold uppercase text-[11px] text-neutral-500">
+                Cliente
               </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSendToWhatsApp}
-            className="w-full sm:w-auto px-5 py-2.5 bg-black hover:bg-zinc-900 text-white font-black text-xs rounded-xl shadow-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-          >
-            <MessageCircle className="w-4 h-4 text-[#25D366] fill-[#25D366]" />
-            <span>Enviar no WhatsApp</span>
-          </button>
-        </div>
-
-        {/* Content: Formatted Digital Receipt Preview */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-xs">
-          {/* Quick Copy / Print Toolbar */}
-          <div className="flex items-center justify-between gap-2 bg-[#240e15] p-2.5 rounded-2xl border border-zinc-800">
-            <span className="text-[11px] font-bold text-zinc-300">
-              Visualização da Comanda de Cozinha:
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="px-3 py-1.5 bg-[#18080c] hover:bg-[#eab308] hover:text-black text-white font-bold text-xs rounded-xl transition-colors border border-zinc-700 flex items-center gap-1.5"
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copiado!' : 'Copiar Texto'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-3 py-1.5 bg-[#18080c] hover:bg-zinc-800 text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition-colors border border-zinc-700 flex items-center gap-1.5"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Imprimir</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Formatted Receipt Box (Terminal / Paper style) */}
-          <div className="bg-[#12080a] border border-[#eab308]/40 rounded-2xl p-4 sm:p-5 font-mono text-[11px] text-zinc-200 leading-relaxed space-y-3 shadow-inner overflow-x-auto">
-            {/* Logo and store title */}
-            <div className="text-center space-y-1 pb-3 border-b border-dashed border-[#eab308]/40">
-              <div className="flex justify-center pb-1">
-                <VaiDeGrillLogo size="sm" />
-              </div>
-              <div className="font-black text-sm text-[#eab308]">
-                LANCHONETE VAI DE GRILL
-              </div>
-              <div className="text-zinc-400 text-[10px]">
-                {RESTAURANT_INFO.address} - Rio Branco, AC<br />
-                Delivery WhatsApp: {RESTAURANT_INFO.phone}
-              </div>
-              <div className="pt-2 font-black text-xs text-white">
-                COMPROVANTE OFICIAL DE COZINHA • PEDIDO #{order.id}
-              </div>
-              <div className="text-[10px] text-zinc-400">
-                Horário do Pedido: {order.createdAt}
-              </div>
-            </div>
-
-            {/* Customer & Delivery Mode */}
-            <div className="pb-2 border-b border-dashed border-zinc-800 space-y-0.5">
-              <div><strong className="text-[#eab308]">CLIENTE:</strong> {order.customer.name}</div>
-              <div><strong className="text-[#eab308]">FONE:</strong> {order.customer.phone}</div>
-              <div>
-                <strong className="text-[#eab308]">TIPO:</strong>{' '}
-                {order.deliveryMethod === 'entrega' ? 'DELIVERY MOTOBOY (RIO BRANCO)' : 'RETIRADA NO BALCÃO (JOÃO EDUARDO)'}
-              </div>
-              {order.customer.address && (
-                <div className="text-zinc-300">
-                  <strong>ENDEREÇO:</strong> {order.customer.address.street}, Nº {order.customer.address.number}<br />
-                  <strong>BAIRRO:</strong> {order.customer.address.neighborhood}<br />
-                  {order.customer.address.complement && <><strong>COMPLEMENTO:</strong> {order.customer.address.complement}<br /></>}
-                  {order.customer.address.referencePoint && <><strong>REFERÊNCIA:</strong> {order.customer.address.referencePoint}</>}
-                </div>
+              <p className="font-bold">
+                {order.customer.name} · <span className="tabular-nums">{order.customer.phone}</span>
+              </p>
+              {order.orderCategory === 'delivery' && order.customer.address && (
+                <p className="text-neutral-700">
+                  Entrega: {order.customer.address.street}, Nº {order.customer.address.number} —{' '}
+                  {order.customer.address.neighborhood}
+                  {order.customer.address.complement
+                    ? ` (${order.customer.address.complement})`
+                    : ''}
+                </p>
               )}
             </div>
 
-            {/* Items and Custom Comandas */}
-            <div className="space-y-2 pb-2 border-b border-dashed border-zinc-800">
-              <div className="font-black text-[#eab308] flex justify-between">
-                <span>ITENS DO PEDIDO</span>
-                <span>SUBTOTAL</span>
-              </div>
+            {/* Products & Add-ons */}
+            <div className="space-y-2.5 border-b border-dashed border-neutral-300 pb-3">
+              <p className="font-bold uppercase text-[11px] text-neutral-500">
+                Produtos e Adicionais da Comanda
+              </p>
+              {order.items.map((item) => {
+                const extras = Object.entries(
+                  item.customization.addedExtras || {}
+                ).filter(([, q]) => q > 0);
 
-              {order.items.map((it, idx) => (
-                <div key={idx} className="space-y-0.5 bg-[#1a0b0e] p-2 rounded border border-zinc-850">
-                  <div className="flex justify-between font-bold text-white">
-                    <span>{it.quantity}x {it.menuItem.name}</span>
-                    <span className="text-[#eab308]">{formatCurrency(it.totalPrice)}</span>
+                return (
+                  <div key={item.cartItemId} className="space-y-0.5">
+                    <div className="flex justify-between font-bold">
+                      <span>
+                        {item.quantity}x {item.menuItem.name}
+                      </span>
+                      <span className="tabular-nums">
+                        {formatCurrency(item.totalPrice)}
+                      </span>
+                    </div>
+                    {item.customization.meatDoneness && (
+                      <p className="pl-3 text-[11px] text-neutral-600">
+                        • Ponto: {item.customization.meatDoneness.replace('_', ' ')}
+                      </p>
+                    )}
+                    {item.customization.removedIngredients.length > 0 && (
+                      <p className="pl-3 text-[11px] text-[#8A0000]">
+                        • Remover: {item.customization.removedIngredients.join(', ')}
+                      </p>
+                    )}
+                    {extras.map(([extId, qty]) => {
+                      const ext =
+                        item.menuItem.availableExtras?.find((e) => e.id === extId) ||
+                        COMMON_EXTRAS.find((e) => e.id === extId);
+                      if (!ext) return null;
+                      return (
+                        <p key={extId} className="pl-3 text-[11px] text-[#111111]">
+                          + Adicional: {qty}x {ext.name} ({formatCurrency(ext.price * qty)})
+                        </p>
+                      );
+                    })}
+                    {item.customization.specialNotes && (
+                      <p className="pl-3 text-[11px] italic text-neutral-600">
+                        • Obs: {item.customization.specialNotes}
+                      </p>
+                    )}
                   </div>
+                );
+              })}
 
-                  {it.customization.meatDoneness && (
-                    <div className="text-amber-300 font-bold">
-                      &gt;&gt; PONTO NA GRELHA: {it.customization.meatDoneness.replace('_', ' ').toUpperCase()}
-                    </div>
-                  )}
-
-                  {it.customization.removedIngredients && it.customization.removedIngredients.length > 0 && (
-                    <div className="text-red-400 font-bold">
-                      &gt;&gt; REMOVER: {it.customization.removedIngredients.join(', ')}
-                    </div>
-                  )}
-
-                  {Object.entries(it.customization.addedExtras || {}).map(([id, q]) => {
-                    const extra = it.menuItem.availableExtras.find((e) => e.id === id);
-                    return extra ? (
-                      <div key={id} className="text-emerald-400 font-bold">
-                        &gt;&gt; ADICIONAL: +{q}x {extra.name} (+{formatCurrency(extra.price * q)})
-                      </div>
-                    ) : null;
-                  })}
-
-                  {it.isCustomBurger && it.customBurgerLayers && (
-                    <div className="text-[10px] text-zinc-300 pt-0.5">
-                      Pão: {it.customBurgerLayers.bread} | Carne: {it.customBurgerLayers.protein} | Queijos: {it.customBurgerLayers.cheeses.join(', ') || 'Nenhum'} | Molhos: {it.customBurgerLayers.sauces.join(', ') || 'Nenhum'}
-                    </div>
-                  )}
-
-                  {it.customization.specialNotes && (
-                    <div className="text-amber-200 italic font-bold">
-                      &gt;&gt; OBS: &quot;{it.customization.specialNotes}&quot;
-                    </div>
-                  )}
-                </div>
-              ))}
+              {order.notes && (
+                <p className="pt-1 text-[11px] font-bold text-[#8A0000]">
+                  Obs. Geral: {order.notes}
+                </p>
+              )}
             </div>
 
-            {/* Financial Summary */}
-            <div className="space-y-1 pb-2 border-b border-dashed border-zinc-800">
+            {/* Totals */}
+            <div className="space-y-1">
               <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>{formatCurrency(order.subtotal)}</span>
+                <span>Subtotal</span>
+                <span className="tabular-nums">{formatCurrency(order.subtotal)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Taxa de Entrega:</span>
-                <span>{formatCurrency(order.deliveryFee)}</span>
-              </div>
-              {order.discount > 0 && (
-                <div className="flex justify-between text-emerald-400 font-bold">
-                  <span>Desconto ({order.couponCode || 'Cupom'}):</span>
-                  <span>-{formatCurrency(order.discount)}</span>
+              {order.orderCategory === 'delivery' && (
+                <div className="flex justify-between">
+                  <span>Taxa Delivery</span>
+                  <span className="tabular-nums">
+                    {formatCurrency(order.deliveryFee)}
+                  </span>
                 </div>
               )}
-              <div className="flex justify-between font-black text-sm text-[#eab308] pt-1 border-t border-zinc-800">
-                <span>VALOR TOTAL:</span>
-                <span>{formatCurrency(order.total)}</span>
+              {order.discount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Desconto</span>
+                  <span className="tabular-nums">-{formatCurrency(order.discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-black text-sm pt-1 border-t border-neutral-200">
+                <span>TOTAL ({order.paymentMethod.toUpperCase()})</span>
+                <span className="tabular-nums text-[#8A0000]">
+                  {formatCurrency(order.total)}
+                </span>
               </div>
-              <div className="text-zinc-300 pt-0.5">
-                PAGAMENTO: <strong className="text-white uppercase">{order.paymentMethod.replace('_', ' ')}</strong>
-                {order.changeFor && ` (Troco para R$ ${order.changeFor.toFixed(2)})`}
-              </div>
-            </div>
-
-            <div className="text-center text-[10px] text-zinc-400 pt-1">
-              *** Comprovante enviado via WhatsApp para a cozinha Vai de Grill ***
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 sm:p-5 bg-[#260f15] border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-neutral-200 bg-white space-y-2.5 no-print">
           <button
             type="button"
-            onClick={handleCopy}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5"
+            onClick={() => triggerWhatsAppKitchenComanda(order)}
+            className="w-full bg-[#8A0000] hover:bg-[#6E0000] text-white font-extrabold py-3 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-            <span>{copied ? 'Comprovante Copiado!' : 'Copiar Texto para WhatsApp'}</span>
+            <MessageCircle className="w-4 h-4 text-[#D4A017]" />
+            <span>
+              Enviar Comanda para Cozinha via WhatsApp ({RESTAURANT_INFO.phone})
+            </span>
           </button>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {onOpenTracking && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenTracking();
-                }}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs"
-              >
-                Rastrear no Mapa
-              </button>
-            )}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="py-2.5 px-3 border border-neutral-300 hover:border-[#111111] rounded-lg text-xs font-bold text-[#111111] flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copiada!' : 'Copiar'}</span>
+            </button>
 
             <button
               type="button"
-              onClick={handleSendToWhatsApp}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebd59] text-black px-6 py-2.5 rounded-xl font-black text-xs shadow-lg transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+              onClick={() => window.print()}
+              className="py-2.5 px-3 border border-neutral-300 hover:border-[#111111] rounded-lg text-xs font-bold text-[#111111] flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <MessageCircle className="w-4 h-4 fill-black" />
-              <span>Abrir no WhatsApp</span>
+              <Printer className="w-3.5 h-3.5" />
+              <span>Imprimir</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenTracking}
+              className="py-2.5 px-3 bg-[#111111] text-[#D4A017] hover:bg-neutral-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Status</span>
             </button>
           </div>
         </div>

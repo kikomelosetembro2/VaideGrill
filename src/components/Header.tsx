@@ -1,197 +1,153 @@
 import React from 'react';
-import { 
-  ShoppingBag, 
-  MapPin, 
-  Phone, 
-  Clock, 
-  ChefHat, 
-  Layers, 
-  User, 
-  BarChart3, 
-  Award, 
-  CheckCircle2,
-  Coins
+import {
+  ShoppingBag,
+  FileImage,
+  ClipboardList,
+  ShieldCheck,
+  UtensilsCrossed,
 } from 'lucide-react';
-import { RESTAURANT_INFO } from '../data/menuData';
+import { QuioskLogo } from './QuioskLogo';
 import { Order } from '../types';
-import { VaiDeGrillLogo } from './VaiDeGrillLogo';
+import { RESTAURANT_INFO, getOrderStatusLabel } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
 
 interface HeaderProps {
   cartItemCount: number;
   cartTotal: number;
-  loyaltyPoints: number;
-  onOpenCart: () => void;
-  onOpenBuildBurger: () => void;
-  onOpenExtrasShop: () => void;
-  onOpenAuth: () => void;
-  onOpenAdminPanel: () => void;
-  onOpenFidelidade: () => void;
-  onToggleKDS: () => void;
   activeOrder: Order | null;
+  onOpenCart: () => void;
+  onOpenOriginalMenu: () => void;
   onOpenTracking: () => void;
-  isKdsActive: boolean;
-  currentUser: { name: string; phone: string } | null;
+  onOpenAdminPanel: () => void;
+  onScrollToMenu: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   cartItemCount,
   cartTotal,
-  loyaltyPoints,
-  onOpenCart,
-  onOpenBuildBurger,
-  onOpenExtrasShop,
-  onOpenAuth,
-  onOpenAdminPanel,
-  onOpenFidelidade,
-  onToggleKDS,
   activeOrder,
+  onOpenCart,
+  onOpenOriginalMenu,
   onOpenTracking,
-  isKdsActive,
-  currentUser,
+  onOpenAdminPanel,
+  onScrollToMenu,
 }) => {
   return (
-    <header className="sticky top-0 z-40 bg-[#180407]/95 backdrop-blur-md border-b border-[#eab308]/40 shadow-2xl">
-      {/* Top emergency contact and address bar with red and mustard styling */}
-      <div className="bg-gradient-to-r from-[#b91c1c] via-[#dc2626] to-[#991b1b] text-white px-3 sm:px-6 py-1.5 text-xs font-bold flex flex-wrap justify-between items-center gap-2 border-b border-[#eab308]/30">
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          <span className="flex items-center gap-1.5 text-white">
-            <MapPin className="w-3.5 h-3.5 text-[#facc15]" />
-            <span>{RESTAURANT_INFO.address} - Rio Branco, AC</span>
-          </span>
-          <span className="hidden sm:inline text-[#facc15]">•</span>
-          <span className="flex items-center gap-1.5 text-amber-100">
-            <Clock className="w-3.5 h-3.5 text-[#facc15]" />
-            <span>Terça a Domingo: 18:00 às 23:00 (Segunda Fechado)</span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200">
+      {/* Subtle top strip with restaurant hours and contact */}
+      <div className="bg-[#111111] text-white text-[11px] py-1.5 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 font-medium text-neutral-200">
+            <span className="inline-block w-2 h-2 rounded-full bg-[#D4A017]" />
+            <span>{RESTAURANT_INFO.openingHours}</span>
+            <span className="text-neutral-500">·</span>
+            <span>{RESTAURANT_INFO.instagram}</span>
+          </div>
           <a
-            href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}?text=${encodeURIComponent('Olá Vai de Grill! Gostaria de fazer um pedido de sanduíche artesanal.')}`}
+            href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-white hover:text-[#facc15] font-black underline transition-colors"
+            className="font-semibold text-[#D4A017] hover:underline tabular-nums"
           >
-            <Phone className="w-3.5 h-3.5 text-[#facc15]" />
-            <span>Delivery: {RESTAURANT_INFO.phone}</span>
+            WhatsApp: {RESTAURANT_INFO.phone}
           </a>
         </div>
       </div>
 
-      {/* Main navigation bar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-4">
-        {/* Brand & Logo with VaiDeGrillLogo */}
-        <div 
-          className="flex items-center cursor-pointer group" 
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          title="Lanchonete Vai de Grill - Sanduíches Artesanais"
+      {/* Main 3-Zone Header Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        {/* Zone 1: Brand Identity with Cardápio Logo */}
+        <a
+          href="#cardapio"
+          onClick={(e) => {
+            e.preventDefault();
+            onScrollToMenu();
+          }}
+          className="flex items-center shrink-0 focus:outline-none"
+          aria-label="Quiosk da Preta — Início"
         >
-          <VaiDeGrillLogo size="md" />
-        </div>
+          <QuioskLogo size="sm" />
+        </a>
 
-        {/* Action Buttons & Navigation */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Active Order Pill button if order exists */}
-          {activeOrder && (
-            <button
-              onClick={onOpenTracking}
-              className="flex items-center gap-1.5 bg-[#7f1d1d] border border-[#eab308] text-[#facc15] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black hover:bg-[#991b1b] transition-colors animate-pulse"
-              title="Acompanhar Pedido em Tempo Real"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#eab308]" />
-              <span className="hidden md:inline">Pedido #{activeOrder.id.slice(-4)}:</span>
-              <span className="uppercase">
-                {activeOrder.status === 'em_preparo' ? 'Na Brasa' : 
-                 activeOrder.status === 'saiu_para_entrega' ? 'A Caminho' : activeOrder.status}
-              </span>
-            </button>
-          )}
-
-          {/* Loyalty Club Button */}
+        {/* Zone 2: Clean Inline Navigation */}
+        <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-neutral-700">
           <button
-            onClick={onOpenFidelidade}
-            className="flex items-center gap-1.5 bg-[#7f1d1d] hover:bg-[#991b1b] text-white border border-[#eab308]/60 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105"
-            title="Ver Seus Pontos de Fidelidade e Resgatar Prêmios"
+            type="button"
+            onClick={onScrollToMenu}
+            className="hover:text-[#8A0000] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
-            <Award className="w-4 h-4 text-[#eab308]" />
-            <span className="hidden md:inline">Clube</span>
-            <span className="text-[#facc15]">{loyaltyPoints} pts</span>
+            <UtensilsCrossed className="w-4 h-4 text-[#D4A017]" />
+            <span>Cardápio</span>
           </button>
 
-          {/* Monte seu Sanduíche Button */}
           <button
-            onClick={onOpenBuildBurger}
-            className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-[#eab308] to-[#ca8a04] hover:from-[#facc15] hover:to-[#eab308] text-black px-3 py-2 rounded-xl text-xs font-black shadow-md shadow-[#eab308]/30 transition-all hover:scale-105"
+            type="button"
+            onClick={onOpenOriginalMenu}
+            className="hover:text-[#8A0000] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
-            <Layers className="w-4 h-4 text-black" />
-            <span>Monte seu Sanduíche</span>
+            <FileImage className="w-4 h-4 text-neutral-500" />
+            <span>Cardápio Original</span>
           </button>
 
-          {/* Adicionais da Brasa Tool Button */}
           <button
-            onClick={onOpenExtrasShop}
-            className="flex items-center gap-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-white border border-[#eab308] px-2.5 sm:px-3 py-2 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105"
-            title="Ferramenta: Comprar Adicionais e Porções da Brasa"
+            type="button"
+            onClick={onOpenTracking}
+            className="hover:text-[#8A0000] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
-            <span className="text-[#eab308] font-black">+</span>
-            <span className="hidden md:inline">Comprar</span>
-            <span>Adicionais</span>
+            <ClipboardList className="w-4 h-4 text-neutral-500" />
+            <span>
+              {activeOrder
+                ? `Pedido ${activeOrder.id} · ${getOrderStatusLabel(activeOrder.status)}`
+                : 'Acompanhar Pedido'}
+            </span>
           </button>
 
-          {/* Admin Panel Button */}
           <button
+            type="button"
             onClick={onOpenAdminPanel}
-            className="flex items-center gap-1.5 bg-[#7f1d1d] hover:bg-[#991b1b] text-[#facc15] px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold border border-[#eab308]/60 transition-colors"
-            title="Painel Administrativo: Dashboard, Produtos Mais Vendidos e Cadastro"
+            className="hover:text-[#8A0000] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
-            <BarChart3 className="w-4 h-4 text-[#eab308]" />
-            <span className="hidden lg:inline">Painel</span>
-            <span>Admin</span>
+            <ShieldCheck className="w-4 h-4 text-neutral-500" />
+            <span>Painel Admin</span>
+          </button>
+        </nav>
+
+        {/* Zone 3: Mobile quick triggers + Primary Cart CTA */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenTracking}
+            className="md:hidden p-2 text-neutral-700 hover:text-[#8A0000] border border-neutral-200 rounded-lg"
+            title="Acompanhar Pedido"
+          >
+            <ClipboardList className="w-4 h-4" />
           </button>
 
-          {/* Kitchen KDS Toggle */}
           <button
-            onClick={onToggleKDS}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-extrabold border transition-colors ${
-              isKdsActive 
-                ? 'bg-[#eab308] text-black border-[#eab308]' 
-                : 'bg-[#26070a] text-zinc-200 border-red-900/60 hover:border-[#eab308]/60 hover:text-white'
-            }`}
-            title="Abrir Gerenciador de Pedidos da Cozinha (KDS)"
+            type="button"
+            onClick={onOpenAdminPanel}
+            className="md:hidden p-2 text-neutral-700 hover:text-[#8A0000] border border-neutral-200 rounded-lg"
+            title="Painel Administrativo"
           >
-            <ChefHat className="w-4 h-4" />
-            <span className="hidden md:inline">Cozinha</span>
-            <span>KDS</span>
+            <ShieldCheck className="w-4 h-4" />
           </button>
 
-          {/* Auth Button */}
           <button
-            onClick={onOpenAuth}
-            className="hidden sm:flex items-center gap-1.5 bg-[#26070a] hover:bg-[#3d0c10] text-zinc-200 hover:text-white px-2.5 sm:px-3 py-2 rounded-xl text-xs font-medium border border-red-900/60 transition-colors"
-            title={currentUser ? `Logado como ${currentUser.name}` : 'Entrar na Conta'}
-          >
-            <User className="w-4 h-4 text-[#eab308]" />
-            <span className="max-w-[80px] truncate">
-              {currentUser ? currentUser.name.split(' ')[0] : 'Entrar'}
-            </span>
-          </button>
-
-          {/* Cart Trigger */}
-          <button
+            type="button"
             onClick={onOpenCart}
-            className="relative flex items-center gap-2 bg-[#dc2626] hover:bg-[#b91c1c] border border-[#eab308] text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all hover:scale-105 shadow-md shadow-[#dc2626]/40"
-            aria-label="Ver Carrinho de Compras"
+            className="bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2.5 text-sm transition-colors shadow-sm cursor-pointer"
           >
-            <ShoppingBag className="w-4 h-4 text-[#eab308]" />
-            <span className="hidden sm:inline">
-              {cartTotal > 0 ? formatCurrency(cartTotal) : 'Carrinho'}
+            <ShoppingBag className="w-4 h-4 text-[#D4A017]" />
+            <span className="tabular-nums">
+              {cartItemCount > 0 ? (
+                <>
+                  {cartItemCount} {cartItemCount === 1 ? 'item' : 'itens'} ·{' '}
+                  {formatCurrency(cartTotal)}
+                </>
+              ) : (
+                'Carrinho'
+              )}
             </span>
-            {cartItemCount > 0 && (
-              <span className="min-w-5 h-5 px-1.5 bg-[#eab308] text-black text-[11px] font-black rounded-full flex items-center justify-center shadow">
-                {cartItemCount}
-              </span>
-            )}
           </button>
         </div>
       </div>

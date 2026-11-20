@@ -1,45 +1,39 @@
-export type CategoryId = 
+export type CategoryId =
   | 'todos'
-  | 'combos_grill'
-  | 'sanduiches_artesanais'
-  | 'especiais_da_grelha'
-  | 'classicos_da_chapa'
-  | 'opcoes_veganas'
-  | 'porcoes_e_petiscos'
-  | 'bebidas_e_sucos'
-  | 'sobremesas';
+  | 'espetinhos'
+  | 'tira_gosto'
+  | 'pratos_arabes'
+  | 'rabada'
+  | 'bebidas';
 
 export interface IngredientOption {
   id: string;
   name: string;
   price: number;
-  category: 'proteina' | 'queijo' | 'molho' | 'salada' | 'extra';
-  calories?: number;
+  category: 'acompanhamento' | 'proteina' | 'bebida_extra' | 'embalagem';
 }
 
 export interface MenuItem {
   id: string;
   name: string;
-  category: CategoryId;
+  category: Exclude<CategoryId, 'todos'>;
   description: string;
   price: number;
   originalPrice?: number;
   image: string;
-  badge?: string;
-  isPopular?: boolean;
-  isSpicy?: boolean;
-  isVegetarian?: boolean;
+  note?: string;
+  supportsDoneness?: boolean;
   prepTimeMinutes: number;
   defaultIngredients: string[];
   removableIngredients: string[];
   availableExtras: IngredientOption[];
-  salesCount?: number; // for most sold report
+  salesCount?: number;
   isAvailable?: boolean;
 }
 
 export interface CustomizationSelection {
   removedIngredients: string[];
-  addedExtras: { [extraId: string]: number }; // quantity
+  addedExtras: { [extraId: string]: number };
   meatDoneness?: 'mal_passado' | 'ao_ponto' | 'bem_passado';
   specialNotes?: string;
 }
@@ -51,34 +45,24 @@ export interface CartItem {
   customization: CustomizationSelection;
   unitPrice: number;
   totalPrice: number;
-  isCustomBurger?: boolean;
-  isLoyaltyReward?: boolean;
-  customBurgerLayers?: {
-    bread: string;
-    protein: string;
-    cheeses: string[];
-    sauces: string[];
-    toppings: string[];
-  };
 }
 
-export type OrderStatus = 
-  | 'recebido'
-  | 'em_preparo'
-  | 'pronto'
-  | 'saiu_para_entrega'
-  | 'entregue'
-  | 'cancelado';
+export type OrderStatus =
+  | 'pedido_aceito'
+  | 'pedido_andamento'
+  | 'pedido_mesa'
+  | 'pedido_delivery'
+  | 'pedido_entrega'
+  | 'pedido_finalizado'
+  | 'pedido_devolvido';
 
-export type PaymentMethod = 'pix' | 'cartao_credito' | 'carteira_digital' | 'dinheiro';
+export type OrderCategory = 'delivery' | 'retirada' | 'mesa';
 
-export type DeliveryMethod = 'entrega' | 'retirada';
+export type PaymentMethod = 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro';
 
 export interface CustomerInfo {
   name: string;
   phone: string;
-  email?: string;
-  loyaltyPoints?: number;
   address?: {
     street: string;
     number: string;
@@ -91,42 +75,39 @@ export interface CustomerInfo {
 }
 
 export interface Order {
-  id: string;
+  id: string; // Ex: "#0001"
+  orderNumber: number; // Sequential integer: 1, 2, 3...
   customer: CustomerInfo;
   items: CartItem[];
-  deliveryMethod: DeliveryMethod;
+  orderCategory: OrderCategory;
+  tableNumber?: string;
   deliveryFee: number;
   subtotal: number;
   discount: number;
   couponCode?: string;
-  loyaltyPointsUsed?: number;
-  loyaltyPointsEarned?: number;
   total: number;
   paymentMethod: PaymentMethod;
   paymentStatus: 'pendente' | 'aprovado';
   changeFor?: number;
   status: OrderStatus;
   createdAt: string;
-  estimatedDeliveryTime: string;
+  createdIso?: string;
+  estimatedTime: string;
   notes?: string;
-  deliveryCoords?: { lat: number; lng: number };
+  readyNotifiedAt?: string;
 }
 
-export interface BuildBurgerStepConfig {
-  breads: { id: string; name: string; price: number; description: string; color: string }[];
-  proteins: { id: string; name: string; price: number; description: string; color: string }[];
-  cheeses: { id: string; name: string; price: number; description: string; color: string }[];
-  sauces: { id: string; name: string; price: number; description: string; color: string }[];
-  toppings: { id: string; name: string; price: number; description: string; color: string }[];
-}
-
-export interface LoyaltyReward {
-  id: string;
-  title: string;
-  description: string;
-  pointsCost: number;
-  type: 'free_item' | 'discount_fixed' | 'free_shipping';
-  discountValue?: number;
-  menuItemId?: string;
-  badge?: string;
+export interface CustomerSpendingReport {
+  customerKey: string;
+  name: string;
+  phone: string;
+  totalOrders: number;
+  totalSpent: number;
+  averageTicket: number;
+  deliveryCount: number;
+  retiradaCount: number;
+  mesaCount: number;
+  lastOrderAt: string;
+  lastOrderId: string;
+  topItem: string;
 }

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, CheckCircle2, ChefHat, Bike, Sparkles, X, Volume2 } from 'lucide-react';
+import { Bell, CheckCircle2, ChefHat, Bike, Sparkles, X, RotateCcw } from 'lucide-react';
 import { OrderStatus } from '../types';
 import { playSound } from '../utils/helpers';
-import { KikomeloLogo } from './KikomeloLogo';
+import { RESTAURANT_INFO } from '../data/menuData';
 
 export interface PushNotificationData {
   id: string;
@@ -24,7 +24,7 @@ export const PushNotificationToast: React.FC<PushNotificationToastProps> = ({
   onDismiss,
   onOpenOrderTracking,
 }) => {
-  const [hasBrowserPushPermission, setHasBrowserPushPermission] = useState<boolean>(false);
+  const [hasBrowserPushPermission, setHasBrowserPushPermission] = useState<boolean>(true);
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -39,55 +39,62 @@ export const PushNotificationToast: React.FC<PushNotificationToastProps> = ({
         setHasBrowserPushPermission(perm === 'granted');
         if (perm === 'granted') {
           playSound('success');
-          new Notification('Kikomelo001 Delivery', {
-            body: 'Notificações push ativadas com sucesso! Você receberá atualizações em tempo real do seu lanche.',
-            icon: '/favicon.ico',
+          new Notification(`${RESTAURANT_INFO.name}`, {
+            body: 'Notificações ativadas! Avisaremos assim que seu pedido estiver pronto.',
           });
         }
       } catch {
-        // notification request error
+        // ignore permission prompt error
       }
     }
   };
 
   const getStatusIcon = (status: OrderStatus) => {
     switch (status) {
-      case 'recebido': return <CheckCircle2 className="w-5 h-5 text-orange-400" />;
-      case 'em_preparo': return <ChefHat className="w-5 h-5 text-amber-400" />;
-      case 'pronto': return <CheckCircle2 className="w-5 h-5 text-blue-400" />;
-      case 'saiu_para_entrega': return <Bike className="w-5 h-5 text-purple-400" />;
-      case 'entregue': return <Sparkles className="w-5 h-5 text-emerald-400" />;
-      default: return <Bell className="w-5 h-5 text-orange-400" />;
+      case 'pedido_aceito':
+        return <CheckCircle2 className="w-5 h-5 text-[#111111]" />;
+      case 'pedido_andamento':
+        return <ChefHat className="w-5 h-5 text-[#D4A017]" />;
+      case 'pedido_mesa':
+      case 'pedido_delivery':
+        return <Bell className="w-5 h-5 text-[#8A0000]" />;
+      case 'pedido_entrega':
+        return <Bike className="w-5 h-5 text-[#D4A017]" />;
+      case 'pedido_finalizado':
+        return <Sparkles className="w-5 h-5 text-emerald-700" />;
+      case 'pedido_devolvido':
+        return <RotateCcw className="w-5 h-5 text-[#8A0000]" />;
+      default:
+        return <Bell className="w-5 h-5 text-[#8A0000]" />;
     }
   };
 
   return (
-    <div className="fixed top-20 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
-      {/* If browser push permission not requested yet, show gentle banner on desktop */}
+    <div className="fixed top-28 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
       {!hasBrowserPushPermission && 'Notification' in window && (
-        <div className="pointer-events-auto bg-zinc-950/95 border border-orange-500/40 p-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 text-xs backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-orange-400 animate-bounce" />
-            <span className="text-zinc-200">
-              Receber alertas de status do pedido na tela?
+        <div className="pointer-events-auto bg-white border border-neutral-300 p-3 rounded-xl shadow-lg flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-[#111111]">
+            <Bell className="w-4 h-4 text-[#8A0000] shrink-0" />
+            <span className="font-medium">
+              Ativar alerta sonoro e na tela quando seu pedido ficar pronto?
             </span>
           </div>
           <button
+            type="button"
             onClick={requestNotificationPermission}
-            className="bg-orange-500 hover:bg-orange-600 text-black font-extrabold px-3 py-1 rounded-xl text-[11px] shrink-0"
+            className="bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-3 py-1.5 rounded-lg text-[11px] shrink-0 cursor-pointer"
           >
             Ativar
           </button>
         </div>
       )}
 
-      {/* Render active notifications list */}
       {notifications.map((notif) => (
         <div
           key={notif.id}
-          className="pointer-events-auto bg-zinc-950/95 border border-orange-500/50 p-4 rounded-2xl shadow-2xl flex items-start gap-3 backdrop-blur-md animate-slide-in transition-all"
+          className="pointer-events-auto bg-white border border-neutral-300 p-4 rounded-xl shadow-xl flex items-start gap-3 transition-all"
         >
-          <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0 border border-orange-500/30">
+          <div className="w-9 h-9 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center shrink-0">
             {getStatusIcon(notif.status)}
           </div>
 
@@ -95,23 +102,27 @@ export const PushNotificationToast: React.FC<PushNotificationToastProps> = ({
             className="flex-1 cursor-pointer"
             onClick={() => onOpenOrderTracking(notif.orderId)}
           >
-            <div className="flex items-center justify-between">
-              <h4 className="font-extrabold text-white text-xs sm:text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-extrabold text-[#111111] text-xs sm:text-sm">
                 {notif.title}
               </h4>
-              <span className="text-[10px] text-zinc-500">{notif.timestamp}</span>
+              <span className="text-[10px] text-neutral-500 tabular-nums shrink-0">
+                {notif.timestamp}
+              </span>
             </div>
-            <p className="text-xs text-zinc-300 mt-0.5 leading-snug">
+            <p className="text-xs text-neutral-600 mt-0.5 leading-snug">
               {notif.message}
             </p>
-            <span className="text-[10px] text-orange-400 font-bold hover:underline inline-block mt-1">
-              Ver no Mapa de Entrega &gt;
+            <span className="text-[11px] text-[#8A0000] font-bold hover:underline inline-block mt-1">
+              Acompanhar Comanda {notif.orderId} &rarr;
             </span>
           </div>
 
           <button
+            type="button"
             onClick={() => onDismiss(notif.id)}
-            className="text-zinc-500 hover:text-white p-1"
+            className="text-neutral-400 hover:text-[#111111] p-1"
+            aria-label="Dispensar"
           >
             <X className="w-4 h-4" />
           </button>
