@@ -118,7 +118,7 @@ export function formatKitchenComandaWhatsApp(order: Order): string {
   }
   if (order.discount > 0) {
     msg += `- Desconto: -R$ ${order.discount.toFixed(2).replace('.', ',')} (${
-      order.couponCode || 'Cupom'
+      order.couponCode || 'Fidelidade'
     })\n`;
   }
   msg += `*TOTAL GERAL: R$ ${order.total.toFixed(2).replace('.', ',')}*\n`;

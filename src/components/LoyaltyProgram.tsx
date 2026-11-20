@@ -4,7 +4,6 @@ import {
   Award,
   User,
   Phone,
-  Tag,
   CheckCircle2,
   Gift,
   TrendingUp,
@@ -21,8 +20,8 @@ interface LoyaltyProgramProps {
   userProfile: { name: string; phone: string };
   onUpdateProfile: (profile: { name: string; phone: string }) => void;
   loyaltyAccount: LoyaltyAccountState;
-  onRedeemSuccess: (updatedAccount: LoyaltyAccountState, couponCode: string) => void;
-  onOpenCartWithCoupon: () => void;
+  onRedeemSuccess: (updatedAccount: LoyaltyAccountState, reward: LoyaltyReward) => void;
+  onOpenCart: () => void;
 }
 
 const PRESET_CUSTOMERS = [
@@ -38,7 +37,7 @@ export const LoyaltyProgram: React.FC<LoyaltyProgramProps> = ({
   onUpdateProfile,
   loyaltyAccount,
   onRedeemSuccess,
-  onOpenCartWithCoupon,
+  onOpenCart,
 }) => {
   const [nameInput, setNameInput] = useState(userProfile.name);
   const [phoneInput, setPhoneInput] = useState(userProfile.phone);
@@ -47,7 +46,7 @@ export const LoyaltyProgram: React.FC<LoyaltyProgramProps> = ({
   const [feedback, setFeedback] = useState<{
     type: 'ok' | 'err';
     text: string;
-    couponCode?: string;
+    canGoToCart?: boolean;
   } | null>(null);
 
   if (!isOpen) return null;
@@ -99,11 +98,11 @@ export const LoyaltyProgram: React.FC<LoyaltyProgramProps> = ({
       if (!res.ok || !data.account) {
         throw new Error(data.error || 'Não foi possível resgatar pontos.');
       }
-      onRedeemSuccess(data.account as LoyaltyAccountState, reward.couponCode);
+      onRedeemSuccess(data.account as LoyaltyAccountState, reward);
       setFeedback({
         type: 'ok',
-        text: `Desconto de ${formatCurrency(reward.discountAmount)} resgatado! Cupom ${reward.couponCode} aplicado ao seu carrinho.`,
-        couponCode: reward.couponCode,
+        text: `Desconto de ${formatCurrency(reward.discountAmount)} resgatado e aplicado diretamente ao seu carrinho!`,
+        canGoToCart: true,
       });
     } catch (err) {
       setFeedback({
@@ -308,12 +307,12 @@ export const LoyaltyProgram: React.FC<LoyaltyProgramProps> = ({
                   <CheckCircle2 className="w-4 h-4 text-[#8A0000] shrink-0" />
                   {feedback.text}
                 </span>
-                {feedback.couponCode && (
+                {feedback.canGoToCart && (
                   <button
                     type="button"
                     onClick={() => {
                       onClose();
-                      onOpenCartWithCoupon();
+                      onOpenCart();
                     }}
                     className="bg-[#8A0000] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
                   >
@@ -348,10 +347,6 @@ export const LoyaltyProgram: React.FC<LoyaltyProgramProps> = ({
                       </div>
                       <p className="text-xs text-neutral-600">
                         {reward.description}
-                      </p>
-                      <p className="text-[11px] font-mono text-neutral-500 flex items-center gap-1">
-                        <Tag className="w-3 h-3 text-[#D4A017]" />
-                        Cupom: {reward.couponCode}
                       </p>
                     </div>
 
@@ -391,10 +386,7 @@ export const LoyaltyProgram: React.FC<LoyaltyProgramProps> = ({
                     className="p-3 flex items-center justify-between gap-2"
                   >
                     <div>
-                      <span className="font-bold text-[#111111]">{h.title}</span>{' '}
-                      <span className="text-neutral-500 font-mono">
-                        ({h.couponCode})
-                      </span>
+                      <span className="font-bold text-[#111111]">{h.title}</span>
                     </div>
                     <span className="font-bold text-[#8A0000] tabular-nums">
                       -{h.pointsSpent} pts · {h.redeemedAt}

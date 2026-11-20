@@ -8,6 +8,7 @@ import {
   Star,
   Award,
   Instagram,
+  Accessibility,
 } from 'lucide-react';
 import { QuioskLogo } from './QuioskLogo';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -18,7 +19,10 @@ import { formatCurrency } from '../utils/helpers';
 interface HeaderProps {
   cartItemCount: number;
   cartTotal: number;
+  isCartAnimating?: boolean;
   loyaltyPoints: number;
+  accessibilityMode: boolean;
+  onToggleAccessibility: () => void;
   activeOrder: Order | null;
   activeMainTab: 'cardapio' | 'eventos';
   onChangeMainTab: (tab: 'cardapio' | 'eventos') => void;
@@ -33,7 +37,10 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   cartItemCount,
   cartTotal,
+  isCartAnimating = false,
   loyaltyPoints,
+  accessibilityMode,
+  onToggleAccessibility,
   activeOrder,
   activeMainTab,
   onChangeMainTab,
@@ -153,8 +160,34 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </nav>
 
-        {/* Zone 3: Install App + Loyalty Points + Small Instagram Logo + Mobile Triggers + Cart CTA */}
+        {/* Zone 3: Accessibility Toggle + Install App + Loyalty Points + Small Instagram Logo + Mobile Triggers + Cart CTA */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onToggleAccessibility}
+            aria-pressed={accessibilityMode}
+            aria-label="Alternar Modo de Acessibilidade"
+            title={
+              accessibilityMode
+                ? 'Modo de Acessibilidade Ativado (Alto Contraste e Fonte Maior) — Clique para desativar'
+                : 'Ativar Modo de Acessibilidade (Alto Contraste e Fonte Maior)'
+            }
+            className={`px-2.5 py-2 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+              accessibilityMode
+                ? 'bg-[#111111] text-[#D4A017] border-[#111111] ring-2 ring-[#D4A017]'
+                : 'bg-white text-[#111111] border-neutral-300 hover:border-[#111111]'
+            }`}
+          >
+            <Accessibility
+              className={`w-4 h-4 ${
+                accessibilityMode ? 'text-[#D4A017]' : 'text-[#8A0000]'
+              }`}
+            />
+            <span className="hidden lg:inline">
+              {accessibilityMode ? 'Acessibilidade: ON' : 'Acessibilidade'}
+            </span>
+          </button>
+
           <PWAInstallButton variant="header" />
 
           <a
@@ -214,9 +247,17 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenCart}
-            className="bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-3.5 sm:px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm transition-colors shadow-sm cursor-pointer"
+            className={`bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-3.5 sm:px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm transition-all duration-200 shadow-sm cursor-pointer ${
+              isCartAnimating ? 'ring-2 ring-[#D4A017] scale-[1.03]' : ''
+            }`}
           >
-            <ShoppingBag className="w-4 h-4 text-[#D4A017]" />
+            <span
+              className={`inline-flex items-center justify-center ${
+                isCartAnimating ? 'animate-cart-bounce' : ''
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4 text-[#D4A017]" />
+            </span>
             <span className="tabular-nums">
               {cartItemCount > 0 ? (
                 <>

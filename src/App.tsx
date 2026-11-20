@@ -8,6 +8,11 @@ import {
   UtensilsCrossed,
   Star,
   Award,
+  Accessibility,
+  Bell,
+  BellRing,
+  BellOff,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   MenuItem,
@@ -17,14 +22,15 @@ import {
   CategoryId,
   EventReview,
   LoyaltyAccountState,
+  LoyaltyReward,
 } from './types';
 import {
   RESTAURANT_INFO,
   MENU_ITEMS,
   COMMON_EXTRAS,
   RIO_BRANCO_NEIGHBORHOODS,
-  AVAILABLE_COUPONS,
   getOrderStatusLabel,
+  resolveProductImage,
 } from './data/menuData';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
@@ -45,7 +51,7 @@ import {
 import { QuioskLogo } from './components/QuioskLogo';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
-import { playSound } from './utils/helpers';
+import { playSound, sendSystemNotification } from './utils/helpers';
 import { triggerWhatsAppKitchenComanda } from './utils/whatsappReceipt';
 
 export default function App() {
@@ -70,6 +76,30 @@ export default function App() {
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState(false);
+  const [accessibilityMode, setAccessibilityMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('quiosk_accessibility_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle(
+        'accessibility-mode',
+        accessibilityMode
+      );
+    }
+    try {
+      localStorage.setItem(
+        'quiosk_accessibility_mode',
+        String(accessibilityMode)
+      );
+    } catch {
+      // ignore storage restrictions
+    }
+  }, [accessibilityMode]);
 
   // User Profile & Loyalty Account State
   const [userProfile, setUserProfile] = useState<{ name: string; phone: string }>({
@@ -93,11 +123,75 @@ export default function App() {
   const [selectedNeighborhood, setSelectedNeighborhood] = useState(
     RIO_BRANCO_NEIGHBORHOODS[0].name
   );
-  const [appliedCoupon, setAppliedCoupon] = useState('');
+  const [activeLoyaltyReward, setActiveLoyaltyReward] =
+    useState<LoyaltyReward | null>(null);
+  const [isCartAnimating, setIsCartAnimating] = useState(false);
+  const cartAnimTimerRef = useRef<number | null>(null);
+  const cartAnimRafRef = useRef<number | null>(null);
+
+  const triggerCartAnimation = useCallback(() => {
+    setIsCartAnimating(false);
+    if (cartAnimTimerRef.current !== null) {
+      window.clearTimeout(cartAnimTimerRef.current);
+      cartAnimTimerRef.current = null;
+    }
+    if (cartAnimRafRef.current !== null) {
+      cancelAnimationFrame(cartAnimRafRef.current);
+      cartAnimRafRef.current = null;
+    }
+    cartAnimRafRef.current = requestAnimationFrame(() => {
+      setIsCartAnimating(true);
+      cartAnimTimerRef.current = window.setTimeout(() => {
+        setIsCartAnimating(false);
+        cartAnimTimerRef.current = null;
+      }, 700);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cartAnimTimerRef.current !== null) {
+        window.clearTimeout(cartAnimTimerRef.current);
+      }
+      if (cartAnimRafRef.current !== null) {
+        cancelAnimationFrame(cartAnimRafRef.current);
+      }
+    };
+  }, []);
 
   // Notifications state & ref to detect newly ready orders during polling
   const [notifications, setNotifications] = useState<PushNotificationData[]>([]);
   const knownStatusesRef = useRef<Record<string, string>>({});
+
+  type BrowserNotificationState = 'default' | 'granted' | 'denied' | 'unsupported';
+  const [notificationPermission, setNotificationPermission] =
+    useState<BrowserNotificationState>(() => {
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        return 'unsupported';
+      }
+      return Notification.permission;
+    });
+
+  const [notificationsOptIn, setNotificationsOptIn] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return false;
+    }
+    try {
+      const saved = localStorage.getItem('quiosk_notifications_enabled');
+      if (saved === 'false') return false;
+      if (saved === 'true') return Notification.permission === 'granted';
+      return Notification.permission === 'granted';
+    } catch {
+      return Notification.permission === 'granted';
+    }
+  });
+
+  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(
+    null
+  );
+
+  const isSystemAlertsActive =
+    notificationPermission === 'granted' && notificationsOptIn;
 
   const emitNotification = useCallback(
     (
@@ -122,16 +216,101 @@ export default function App() {
       setNotifications((prev) => [notif, ...prev.slice(0, 3)]);
       playSound(soundType);
 
-      if ('Notification' in window && Notification.permission === 'granted') {
+      if (
+        'Notification' in window &&
+        Notification.permission === 'granted' &&
+        notificationsOptIn
+      ) {
+        void sendSystemNotification(title, message, orderId);
+      }
+    },
+    [notificationsOptIn]
+  );
+
+  const handleAcceptNotifications = useCallback(async () => {
+    setNotificationFeedback(null);
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setNotificationPermission('unsupported');
+      setNotificationFeedback(
+        'Este navegador não oferece suporte a notificações do sistema.'
+      );
+      return;
+    }
+
+    try {
+      let perm = Notification.permission;
+      if (perm !== 'granted') {
+        perm = await Notification.requestPermission();
+      }
+      setNotificationPermission(perm);
+
+      if (perm === 'granted') {
+        setNotificationsOptIn(true);
         try {
-          new Notification(title, { body: message });
+          localStorage.setItem('quiosk_notifications_enabled', 'true');
         } catch {
           // ignore
         }
+        playSound('success');
+        const sent = await sendSystemNotification(
+          `${RESTAURANT_INFO.name} · Notificações Ativadas`,
+          'Você receberá alertas em tempo real do seu pedido mesmo fora do aplicativo.',
+          'quiosk-welcome-notif'
+        );
+        setNotificationFeedback(
+          sent
+            ? 'Notificações ativadas! Você receberá alertas mesmo fora do app.'
+            : 'Permissão concedida! Os alertas de pedido serão exibidos automaticamente.'
+        );
+      } else if (perm === 'denied') {
+        setNotificationsOptIn(false);
+        try {
+          localStorage.setItem('quiosk_notifications_enabled', 'false');
+        } catch {
+          // ignore
+        }
+        setNotificationFeedback(
+          'Permissão bloqueada no navegador. Libere "Notificações" nas configurações do site (ícone de cadeado).'
+        );
+      } else {
+        setNotificationFeedback(
+          'Solicitação cancelada. Clique novamente em "Aceitar Notificações" quando quiser ativar.'
+        );
       }
-    },
-    []
-  );
+    } catch {
+      setNotificationFeedback(
+        'Não foi possível solicitar permissão de notificações neste dispositivo.'
+      );
+    }
+  }, []);
+
+  const handleDisableNotifications = useCallback(() => {
+    setNotificationsOptIn(false);
+    try {
+      localStorage.setItem('quiosk_notifications_enabled', 'false');
+    } catch {
+      // ignore
+    }
+    setNotificationFeedback('Alertas externos pausados. Você pode reativar a qualquer momento.');
+  }, []);
+
+  const handleTestSystemNotification = useCallback(async () => {
+    if (notificationPermission !== 'granted' || !notificationsOptIn) {
+      await handleAcceptNotifications();
+      return;
+    }
+    playSound('ding');
+    const ok = await sendSystemNotification(
+      `${RESTAURANT_INFO.name} · Alerta de Teste`,
+      'Tudo certo! Seus alertas de preparo e entrega estão funcionando fora do app.',
+      `quiosk-test-${Date.now()}`
+    );
+    setNotificationFeedback(
+      ok
+        ? 'Notificação de teste enviada para o sistema!'
+        : 'Não foi possível exibir a notificação de teste.'
+    );
+  }, [notificationPermission, notificationsOptIn, handleAcceptNotifications]);
 
   // Fetch products once on mount
   useEffect(() => {
@@ -142,6 +321,7 @@ export default function App() {
           setProducts(
             data.products.map((p: MenuItem) => ({
               ...p,
+              image: resolveProductImage(p.image, p.category),
               availableExtras:
                 p.availableExtras && p.availableExtras.length > 0
                   ? p.availableExtras
@@ -158,7 +338,14 @@ export default function App() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data.events)) {
-          setEvents(data.events);
+          setEvents(
+            data.events.map((ev: EventReview) => ({
+              ...ev,
+              photoUrl: ev.photoUrl
+                ? resolveProductImage(ev.photoUrl)
+                : undefined,
+            }))
+          );
         }
       })
       .catch(() => {
@@ -170,7 +357,20 @@ export default function App() {
   const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch('/api/orders');
-      if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
+        try {
+          const rawLocal = localStorage.getItem('quiosk_local_orders');
+          const localOrders: Order[] = rawLocal ? JSON.parse(rawLocal) : [];
+          if (Array.isArray(localOrders) && localOrders.length > 0) {
+            setOrders((prev) => (prev.length > 0 ? prev : localOrders));
+            setActiveOrderId((curr) => curr || localOrders[0]?.id || null);
+          }
+        } catch {
+          // ignore
+        }
+        return;
+      }
       const data = await res.json();
       if (!Array.isArray(data.orders)) return;
 
@@ -226,7 +426,16 @@ export default function App() {
   useEffect(() => {
     fetchOrders();
     const timer = setInterval(fetchOrders, 5000);
-    return () => clearInterval(timer);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchOrders();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchOrders]);
 
   // Cart Financial Calculations
@@ -238,13 +447,8 @@ export default function App() {
     orderCategory === 'delivery' ? neighborhoodObj?.fee || 6.0 : 0;
 
   let discountAmount = 0;
-  if (appliedCoupon && AVAILABLE_COUPONS[appliedCoupon]) {
-    const info = AVAILABLE_COUPONS[appliedCoupon];
-    if (cartSubtotal >= info.minOrder) {
-      discountAmount = info.discountPercent
-        ? (cartSubtotal * info.discountPercent) / 100
-        : info.discountFixed || 0;
-    }
+  if (activeLoyaltyReward && cartSubtotal >= activeLoyaltyReward.minOrder) {
+    discountAmount = activeLoyaltyReward.discountAmount;
   }
 
   const cartTotal = Math.max(0, cartSubtotal + deliveryFee - discountAmount);
@@ -254,6 +458,7 @@ export default function App() {
   const handleAddToCart = (cartItem: CartItem) => {
     playSound('success');
     setCartItems((prev) => [...prev, cartItem]);
+    triggerCartAnimation();
     setIsCartOpen(true);
   };
 
@@ -278,6 +483,7 @@ export default function App() {
       totalPrice: item.price,
     };
     setCartItems((prev) => [...prev, quick]);
+    triggerCartAnimation();
     setIsCartOpen(true);
   };
 
@@ -297,13 +503,6 @@ export default function App() {
 
   const handleRemoveItem = (cartItemId: string) => {
     setCartItems((prev) => prev.filter((i) => i.cartItemId !== cartItemId));
-  };
-
-  const handleApplyCoupon = (code: string): boolean => {
-    const coupon = AVAILABLE_COUPONS[code];
-    if (!coupon || cartSubtotal < coupon.minOrder) return false;
-    setAppliedCoupon(code);
-    return true;
   };
 
   // Sync loyalty points based on customer total spend
@@ -333,7 +532,7 @@ export default function App() {
     setActiveOrderId(newOrder.id);
     setSelectedReceiptOrder(newOrder);
     setCartItems([]);
-    setAppliedCoupon('');
+    setActiveLoyaltyReward(null);
     setIsReceiptModalOpen(true);
 
     if (newOrder.customer?.phone) {
@@ -393,13 +592,18 @@ export default function App() {
           setActiveOrderId(ordId);
           setIsTrackingOpen(true);
         }}
+        canPromptBrowserPush={notificationPermission === 'default'}
+        onAcceptNotifications={handleAcceptNotifications}
       />
 
       {/* Sticky 3-Zone Header with Quiosk da Preta Logo */}
       <Header
         cartItemCount={cartItemCount}
         cartTotal={cartTotal}
+        isCartAnimating={isCartAnimating}
         loyaltyPoints={loyaltyAccount.balance}
+        accessibilityMode={accessibilityMode}
+        onToggleAccessibility={() => setAccessibilityMode((prev) => !prev)}
         activeOrder={activeOrder}
         activeMainTab={activeMainTab}
         onChangeMainTab={(tab) => {
@@ -552,7 +756,99 @@ export default function App() {
                 <span>Acessar Painel Administrativo</span>
               </button>
               <PWAInstallButton variant="footer" />
+              <button
+                type="button"
+                onClick={() => setAccessibilityMode((prev) => !prev)}
+                aria-pressed={accessibilityMode}
+                className="inline-flex items-center gap-1.5 font-bold text-[#111111] hover:text-[#8A0000] cursor-pointer"
+              >
+                <Accessibility className="w-4 h-4 text-[#8A0000]" />
+                <span>
+                  Modo de Acessibilidade:{' '}
+                  {accessibilityMode ? 'Ativado' : 'Desativado'}
+                </span>
+              </button>
             </div>
+          </div>
+        </div>
+
+        {/* Footer System Notifications Opt-in Bar */}
+        <div className="max-w-7xl mx-auto mt-8 pt-6 border-t border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                isSystemAlertsActive
+                  ? 'bg-[#111111] border-[#111111] text-[#D4A017]'
+                  : 'bg-white border-neutral-300 text-[#8A0000]'
+              }`}
+            >
+              {isSystemAlertsActive ? (
+                <BellRing className="w-5 h-5" />
+              ) : (
+                <Bell className="w-5 h-5" />
+              )}
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h5 className="font-extrabold text-sm text-[#111111]">
+                  Notificações do Pedido em Tempo Real
+                </h5>
+                {isSystemAlertsActive && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Ativadas</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-neutral-600">
+                Receba alertas do sistema na tela do celular ou computador quando seu pedido entrar em preparo ou ficar pronto, mesmo fora do aplicativo.
+              </p>
+              {notificationFeedback && (
+                <p
+                  className={`text-xs font-bold pt-1 ${
+                    notificationPermission === 'denied' ||
+                    notificationPermission === 'unsupported'
+                      ? 'text-[#8A0000]'
+                      : 'text-emerald-700'
+                  }`}
+                >
+                  {notificationFeedback}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {isSystemAlertsActive ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleTestSystemNotification}
+                  className="px-3.5 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-[#111111] text-[#111111] font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <BellRing className="w-4 h-4 text-[#D4A017]" />
+                  <span>Testar Alerta</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDisableNotifications}
+                  className="px-3.5 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-[#8A0000] text-neutral-700 hover:text-[#8A0000] font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <BellOff className="w-4 h-4" />
+                  <span>Pausar Alertas</span>
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAcceptNotifications}
+                disabled={notificationPermission === 'unsupported'}
+                className="bg-[#8A0000] hover:bg-[#6E0000] disabled:opacity-50 text-white font-extrabold px-4 py-2.5 rounded-lg text-xs flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+              >
+                <BellRing className="w-4 h-4 text-[#D4A017]" />
+                <span>Aceitar Notificações</span>
+              </button>
+            )}
           </div>
         </div>
       </footer>
@@ -573,6 +869,7 @@ export default function App() {
 
       <CartDrawer
         isOpen={isCartOpen}
+        isCartAnimating={isCartAnimating}
         onClose={() => setIsCartOpen(false)}
         items={cartItems}
         onUpdateQuantity={handleUpdateQuantity}
@@ -583,9 +880,10 @@ export default function App() {
         onChangeTableNumber={setTableNumber}
         selectedNeighborhood={selectedNeighborhood}
         onSelectNeighborhood={setSelectedNeighborhood}
-        appliedCoupon={appliedCoupon}
-        onApplyCoupon={handleApplyCoupon}
-        onRemoveCoupon={() => setAppliedCoupon('')}
+        loyaltyDiscountLabel={
+          activeLoyaltyReward ? `Fidelidade (${activeLoyaltyReward.title})` : undefined
+        }
+        onRemoveLoyaltyDiscount={() => setActiveLoyaltyReward(null)}
         subtotal={cartSubtotal}
         deliveryFee={deliveryFee}
         discountAmount={discountAmount}
@@ -608,7 +906,7 @@ export default function App() {
         deliveryFee={deliveryFee}
         subtotal={cartSubtotal}
         discountAmount={discountAmount}
-        couponCode={appliedCoupon || undefined}
+        couponCode={activeLoyaltyReward ? 'Fidelidade' : undefined}
         total={cartTotal}
         onOrderCreated={handleOrderCreated}
       />
@@ -659,12 +957,12 @@ export default function App() {
         userProfile={userProfile}
         onUpdateProfile={(prof) => setUserProfile(prof)}
         loyaltyAccount={loyaltyAccount}
-        onRedeemSuccess={(updatedAccount, couponCode) => {
+        onRedeemSuccess={(updatedAccount, reward) => {
           playSound('success');
           setLoyaltyAccount(updatedAccount);
-          setAppliedCoupon(couponCode);
+          setActiveLoyaltyReward(reward);
         }}
-        onOpenCartWithCoupon={() => setIsCartOpen(true)}
+        onOpenCart={() => setIsCartOpen(true)}
       />
     </div>
   );

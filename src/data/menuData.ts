@@ -4,7 +4,13 @@ import {
   OrderStatus,
   OrderCategory,
   LoyaltyReward,
+  CategoryId,
 } from '../types';
+import imgEspetinhos from '../assets/images/quiosk_espetinhos_brasa_1795201717534.jpg';
+import imgTiraGosto from '../assets/images/quiosk_tira_gosto_chapa_1795201717932.jpg';
+import imgPratosArabes from '../assets/images/quiosk_pratos_arabes_1795201719378.jpg';
+import imgRabada from '../assets/images/quiosk_rabada_tucupi_1795201719477.jpg';
+import imgBebidas from '../assets/images/quiosk_bebidas_geladas_1795201719105.jpg';
 
 export const RESTAURANT_INFO = {
   name: 'Quiosk da Preta',
@@ -24,12 +30,28 @@ export const RESTAURANT_INFO = {
 };
 
 export const CATEGORY_IMAGES = {
-  espetinhos: '/images/quiosk_espetinhos_brasa_1795201717534.jpg',
-  tira_gosto: '/images/quiosk_tira_gosto_chapa_1795201717932.jpg',
-  pratos_arabes: '/images/quiosk_pratos_arabes_1795201719378.jpg',
-  rabada: '/images/quiosk_rabada_tucupi_1795201719477.jpg',
-  bebidas: '/images/quiosk_bebidas_geladas_1795201719105.jpg',
+  espetinhos: imgEspetinhos,
+  tira_gosto: imgTiraGosto,
+  pratos_arabes: imgPratosArabes,
+  rabada: imgRabada,
+  bebidas: imgBebidas,
 };
+
+export function resolveProductImage(
+  rawUrl: string | undefined,
+  category?: Exclude<CategoryId, 'todos'>
+): string {
+  const fallback =
+    (category && CATEGORY_IMAGES[category]) || CATEGORY_IMAGES.espetinhos;
+  if (!rawUrl || !rawUrl.trim()) return fallback;
+  const trimmed = rawUrl.trim();
+  if (trimmed.includes('quiosk_espetinhos_brasa')) return CATEGORY_IMAGES.espetinhos;
+  if (trimmed.includes('quiosk_tira_gosto_chapa')) return CATEGORY_IMAGES.tira_gosto;
+  if (trimmed.includes('quiosk_pratos_arabes')) return CATEGORY_IMAGES.pratos_arabes;
+  if (trimmed.includes('quiosk_rabada_tucupi')) return CATEGORY_IMAGES.rabada;
+  if (trimmed.includes('quiosk_bebidas_geladas')) return CATEGORY_IMAGES.bebidas;
+  return trimmed;
+}
 
 export const ORDER_STATUS_LIST: {
   id: OrderStatus;
@@ -124,15 +146,6 @@ export const RIO_BRANCO_NEIGHBORHOODS = [
   { name: 'Xavier Maia / Rui Lino / Manoel Julião', fee: 8.0, time: '30-45 min' },
   { name: 'Placas / Calafate / Segundo Distrito', fee: 9.0, time: '35-50 min' },
 ];
-
-export const AVAILABLE_COUPONS: Record<string, { discountPercent?: number; discountFixed?: number; minOrder: number; label: string }> = {
-  PRETA10: { discountPercent: 10, minOrder: 40, label: '10% OFF no cardápio Quiosk da Preta' },
-  QUIOSK5: { discountFixed: 5, minOrder: 30, label: 'R$ 5,00 OFF em pedidos acima de R$ 30' },
-  FIDELIDADE5: { discountFixed: 5, minOrder: 20, label: 'Fidelidade: R$ 5,00 OFF no pedido' },
-  FIDELIDADE12: { discountFixed: 12, minOrder: 35, label: 'Fidelidade: R$ 12,00 OFF no pedido' },
-  FIDELIDADE25: { discountFixed: 25, minOrder: 60, label: 'Fidelidade: R$ 25,00 OFF no pedido' },
-  FIDELIDADE40: { discountFixed: 40, minOrder: 90, label: 'Fidelidade: R$ 40,00 OFF no pedido' },
-};
 
 export const LOYALTY_REWARDS: LoyaltyReward[] = [
   {

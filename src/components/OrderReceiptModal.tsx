@@ -7,7 +7,9 @@ import {
   Check,
   Navigation,
   ReceiptText,
+  QrCode,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Order } from '../types';
 import {
   RESTAURANT_INFO,
@@ -19,7 +21,8 @@ import {
   formatKitchenComandaWhatsApp,
   triggerWhatsAppKitchenComanda,
 } from '../utils/whatsappReceipt';
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, copyTextToClipboard } from '../utils/helpers';
+import { generatePixCopiaECola } from '../utils/pixPayload';
 import { QuioskLogo } from './QuioskLogo';
 
 interface OrderReceiptModalProps {
@@ -36,6 +39,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
   onOpenTracking,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [pixCopied, setPixCopied] = useState(false);
 
   if (!isOpen || !order) return null;
 
@@ -43,13 +47,34 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
     ORDER_STATUS_LIST.find((s) => s.id === order.status) || ORDER_STATUS_LIST[0];
   const categoryInfo = ORDER_CATEGORY_LABELS[order.orderCategory];
 
-  const handleCopy = () => {
-    try {
-      navigator.clipboard.writeText(formatKitchenComandaWhatsApp(order));
+  const pixPayload =
+    order.paymentMethod === 'pix'
+      ? generatePixCopiaECola({
+          pixKey: RESTAURANT_INFO.pixKey,
+          merchantName: RESTAURANT_INFO.pixBeneficiary,
+          merchantCity: RESTAURANT_INFO.city,
+          amount: order.total,
+          txid: `QUIOSK${String(order.orderNumber).padStart(4, '0')}`,
+        })
+      : '';
+
+  const handleCopy = async () => {
+    const ok = await copyTextToClipboard(formatKitchenComandaWhatsApp(order));
+    if (ok) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // ignore
+      window.setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
+  const handleCopyPix = async (e?: React.SyntheticEvent<HTMLInputElement | HTMLButtonElement>) => {
+    if (e && e.currentTarget instanceof HTMLInputElement) {
+      e.currentTarget.select();
+    }
+    if (!pixPayload) return;
+    const ok = await copyTextToClipboard(pixPayload);
+    if (ok) {
+      setPixCopied(true);
+      window.setTimeout(() => setPixCopied(false), 2500);
     }
   };
 
@@ -222,6 +247,53 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
               </div>
             </div>
           </div>
+
+          {order.paymentMethod === 'pix' && pixPayload && (
+            <div className="mt-4 bg-white border border-neutral-300 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4 no-print">
+              <div className="p-2.5 bg-white border border-[#111111] rounded-lg shrink-0">
+                <QRCodeSVG
+                  value={pixPayload}
+                  size={104}
+                  level="M"
+                  bgColor="#FFFFFF"
+                  fgColor="#111111"
+                />
+              </div>
+              <div className="flex-1 w-full space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-extrabold text-[#111111] flex items-center gap-1.5">
+                    <QrCode className="w-4 h-4 text-[#8A0000]" />
+                    <span>Pix da Comanda {order.id}</span>
+                  </span>
+                  <span className="font-black text-[#8A0000] tabular-nums">
+                    {formatCurrency(order.total)}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={pixPayload}
+                    onClick={handleCopyPix}
+                    aria-label="Pix Copia e Cola da Comanda"
+                    className="flex-1 px-2.5 py-2 bg-neutral-50 border border-neutral-300 hover:border-[#8A0000] rounded-lg font-mono text-[11px] text-[#111111] select-all cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyPix}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer ${
+                      pixCopied
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-[#111111] text-[#D4A017] hover:bg-neutral-800'
+                    }`}
+                  >
+                    {pixCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{pixCopied ? 'Copiado!' : 'Copiar'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}

@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { EventReview } from '../types';
+import { CATEGORY_IMAGES, resolveProductImage } from '../data/menuData';
 
 interface EventsSectionProps {
   events: EventReview[];
@@ -493,8 +494,11 @@ export const EventsSection: React.FC<EventsSectionProps> = ({
                   >
                     <div className="aspect-[4/3] w-full bg-neutral-100 relative overflow-hidden">
                       <img
-                        src={item.photoUrl}
+                        src={resolveProductImage(item.photoUrl)}
                         alt={`Foto da Mesa ${item.tableNumber} por ${item.customerName}`}
+                        onError={(e) => {
+                          e.currentTarget.src = CATEGORY_IMAGES.espetinhos;
+                        }}
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute bottom-2 left-2 bg-[#111111]/90 text-[#D4A017] px-2.5 py-1 rounded text-[11px] font-bold">
@@ -619,8 +623,11 @@ export const EventsSection: React.FC<EventsSectionProps> = ({
                     {rev.photoUrl && rev.customerMode === 'mesa_presencial' && (
                       <div className="rounded-xl overflow-hidden border border-neutral-200 max-w-md bg-neutral-100">
                         <img
-                          src={rev.photoUrl}
+                          src={resolveProductImage(rev.photoUrl)}
                           alt={`Foto presencial Mesa ${rev.tableNumber}`}
+                          onError={(e) => {
+                            e.currentTarget.src = CATEGORY_IMAGES.espetinhos;
+                          }}
                           className="w-full h-56 object-cover"
                         />
                       </div>

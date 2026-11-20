@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   X,
   ShoppingBag,
@@ -8,20 +8,19 @@ import {
   Bike,
   Store,
   UtensilsCrossed,
-  Tag,
   ArrowRight,
 } from 'lucide-react';
 import { CartItem, OrderCategory } from '../types';
 import {
   COMMON_EXTRAS,
   RIO_BRANCO_NEIGHBORHOODS,
-  AVAILABLE_COUPONS,
   CATEGORY_IMAGES,
 } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
 
 interface CartDrawerProps {
   isOpen: boolean;
+  isCartAnimating?: boolean;
   onClose: () => void;
   items: CartItem[];
   onUpdateQuantity: (cartItemId: string, newQty: number) => void;
@@ -32,9 +31,8 @@ interface CartDrawerProps {
   onChangeTableNumber: (val: string) => void;
   selectedNeighborhood: string;
   onSelectNeighborhood: (name: string) => void;
-  appliedCoupon: string;
-  onApplyCoupon: (code: string) => boolean;
-  onRemoveCoupon: () => void;
+  loyaltyDiscountLabel?: string;
+  onRemoveLoyaltyDiscount?: () => void;
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
@@ -44,6 +42,7 @@ interface CartDrawerProps {
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
   isOpen,
+  isCartAnimating = false,
   onClose,
   items,
   onUpdateQuantity,
@@ -54,39 +53,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onChangeTableNumber,
   selectedNeighborhood,
   onSelectNeighborhood,
-  appliedCoupon,
-  onApplyCoupon,
-  onRemoveCoupon,
+  loyaltyDiscountLabel,
+  onRemoveLoyaltyDiscount,
   subtotal,
   deliveryFee,
   discountAmount,
   total,
   onProceedToCheckout,
 }) => {
-  const [couponInput, setCouponInput] = useState('');
-  const [couponFeedback, setCouponFeedback] = useState<string | null>(null);
-
   if (!isOpen) return null;
-
-  const handleCouponSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = couponInput.trim().toUpperCase();
-    if (!code) return;
-    const ok = onApplyCoupon(code);
-    if (ok) {
-      setCouponFeedback(`Cupom ${code} aplicado.`);
-      setCouponInput('');
-    } else {
-      const exists = AVAILABLE_COUPONS[code];
-      if (exists) {
-        setCouponFeedback(
-          `Pedido mínimo de ${formatCurrency(exists.minOrder)} para o cupom ${code}.`
-        );
-      } else {
-        setCouponFeedback('Cupom inválido. Tente PRETA10 ou QUIOSK5.');
-      }
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
@@ -94,7 +69,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Header */}
         <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <ShoppingBag className="w-5 h-5 text-[#8A0000]" />
+            <span
+              className={`inline-flex items-center justify-center ${
+                isCartAnimating ? 'animate-cart-bounce' : ''
+              }`}
+            >
+              <ShoppingBag className="w-5 h-5 text-[#8A0000]" />
+            </span>
             <h2 className="font-black text-base text-[#111111]">
               Seu Carrinho ({items.reduce((acc, i) => acc + i.quantity, 0)})
             </h2>
@@ -318,47 +299,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   );
                 })}
               </div>
-
-              {/* Coupon */}
-              <div className="space-y-2 pt-1">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-[#D4A017]" />
-                  <span>Cupom de Desconto (PRETA10 / QUIOSK5)</span>
-                </label>
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-[#D4A017] rounded-lg text-xs">
-                    <span className="font-bold text-[#111111]">
-                      Cupom ativo: {appliedCoupon} (-{formatCurrency(discountAmount)})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={onRemoveCoupon}
-                      className="text-[#8A0000] font-bold hover:underline"
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleCouponSubmit} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      placeholder="Digite o código"
-                      className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-xs uppercase text-[#111111] focus:outline-none focus:border-[#8A0000]"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-[#111111] hover:bg-neutral-800 text-[#D4A017] font-bold rounded-lg text-xs cursor-pointer"
-                    >
-                      Aplicar
-                    </button>
-                  </form>
-                )}
-                {couponFeedback && (
-                  <p className="text-[11px] text-neutral-600">{couponFeedback}</p>
-                )}
-              </div>
             </>
           )}
         </div>
@@ -382,8 +322,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               )}
               {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-700 font-bold">
-                  <span>Desconto ({appliedCoupon})</span>
+                <div className="flex justify-between items-center text-emerald-700 font-bold">
+                  <span className="flex items-center gap-2">
+                    <span>{loyaltyDiscountLabel || 'Desconto Fidelidade'}</span>
+                    {onRemoveLoyaltyDiscount && (
+                      <button
+                        type="button"
+                        onClick={onRemoveLoyaltyDiscount}
+                        className="text-[#8A0000] underline text-[11px] font-bold cursor-pointer"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </span>
                   <span className="tabular-nums">-{formatCurrency(discountAmount)}</span>
                 </div>
               )}

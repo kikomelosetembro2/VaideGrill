@@ -18,6 +18,8 @@ export default defineConfig(() => {
           'pwa-192x192.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
+          'images/*.jpg',
+          'assets/aistudio/*.jpg',
         ],
         manifest: {
           id: '/',
@@ -56,9 +58,18 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,webp,woff2}'],
+          cleanupOutdatedCaches: true,
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
+            {
+              urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'quiosk-images-cache',
+                expiration: {maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30},
+              },
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',

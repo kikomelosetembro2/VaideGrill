@@ -752,6 +752,9 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: '5mb' }));
   app.use('/images', express.static(path.resolve(process.cwd(), 'public/images')));
+  app.use('/images', express.static(path.resolve(process.cwd(), 'dist/images')));
+  app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'public/images')));
+  app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'dist/images')));
   app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'src/assets/images')));
 
   // ======================== ADMIN AUTH ROUTES ========================
@@ -1337,6 +1340,21 @@ async function startServer() {
       redemption,
       account: computeLoyaltyForPhone(phone),
     });
+  });
+
+  // Ensure /api/* always returns JSON on unknown routes or server errors
+  app.use('/api', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'Rota da API não encontrada.' });
+  });
+
+  app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api')) {
+      const message =
+        err instanceof Error ? err.message : 'Erro interno no servidor.';
+      res.status(500).json({ error: message });
+      return;
+    }
+    next(err);
   });
 
   // ======================== VITE / STATIC SERVING ========================

@@ -22,7 +22,7 @@ import {
   PaymentMethod,
 } from '../types';
 import { RESTAURANT_INFO, ORDER_CATEGORY_LABELS } from '../data/menuData';
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, copyTextToClipboard } from '../utils/helpers';
 import { generatePixCopiaECola } from '../utils/pixPayload';
 
 interface CheckoutModalProps {
@@ -73,6 +73,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [pixKeyCopied, setPixKeyCopied] = useState(false);
   const [pixConfirmed, setPixConfirmed] = useState(false);
 
+  const [sessionTxid] = useState(() =>
+    `QP${Date.now().toString(36).toUpperCase().slice(-6)}`
+  );
+
   const pixCopiaECola = useMemo(
     () =>
       generatePixCopiaECola({
@@ -80,30 +84,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         merchantName: RESTAURANT_INFO.pixBeneficiary,
         merchantCity: RESTAURANT_INFO.city,
         amount: total,
-        txid: 'QUIOSKDAPRETA',
+        txid: `${sessionTxid}${Math.round(Math.max(0, total) * 100)}`.slice(0, 25),
       }),
-    [total]
+    [total, sessionTxid]
   );
 
   if (!isOpen) return null;
 
-  const handleCopyPixCode = () => {
-    try {
-      navigator.clipboard.writeText(pixCopiaECola);
+  const handleCopyPixCode = async (e?: React.SyntheticEvent<HTMLInputElement | HTMLButtonElement>) => {
+    if (e && e.currentTarget instanceof HTMLInputElement) {
+      e.currentTarget.select();
+    }
+    const ok = await copyTextToClipboard(pixCopiaECola);
+    if (ok) {
       setPixCodeCopied(true);
-      setTimeout(() => setPixCodeCopied(false), 2500);
-    } catch {
-      // ignore clipboard errors
+      window.setTimeout(() => setPixCodeCopied(false), 2600);
     }
   };
 
-  const handleCopyPixKey = () => {
-    try {
-      navigator.clipboard.writeText(RESTAURANT_INFO.pixKey);
+  const handleCopyPixKey = async (e?: React.SyntheticEvent<HTMLInputElement | HTMLButtonElement>) => {
+    if (e && e.currentTarget instanceof HTMLInputElement) {
+      e.currentTarget.select();
+    }
+    const ok = await copyTextToClipboard(RESTAURANT_INFO.pixKey);
+    if (ok) {
       setPixKeyCopied(true);
-      setTimeout(() => setPixKeyCopied(false), 2500);
-    } catch {
-      // ignore clipboard errors
+      window.setTimeout(() => setPixKeyCopied(false), 2600);
     }
   };
 
@@ -129,6 +135,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
 
     const parsedChange = changeFor ? Number(changeFor.replace(',', '.')) : undefined;
+
+    const computedPaymentStatus: 'aprovado' | 'pendente' =
+      paymentMethod === 'pix' && pixConfirmed ? 'aprovado' : 'pendente';
 
     setIsSubmitting(true);
     try {
@@ -159,8 +168,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         couponCode,
         total,
         paymentMethod,
-        paymentStatus:
-          paymentMethod === 'pix' && pixConfirmed ? 'aprovado' : 'pendente',
+        paymentStatus: computedPaymentStatus,
         changeFor:
           paymentMethod === 'dinheiro' && parsedChange && parsedChange > total
             ? parsedChange
@@ -168,18 +176,87 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         notes: notes.trim() || undefined,
       };
 
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let createdOrder: Order | null = null;
+      let apiValidationError: string | null = null;
 
-      const data = await res.json();
-      if (!res.ok || !data.order) {
-        throw new Error(data.error || 'Não foi possível registrar o pedido.');
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const rawText = await res.text();
+        let parsed: { order?: Order; error?: string } | null = null;
+        try {
+          parsed = rawText ? (JSON.parse(rawText) as { order?: Order; error?: string }) : null;
+        } catch {
+          parsed = null;
+        }
+
+        if (res.ok && parsed?.order) {
+          createdOrder = parsed.order;
+        } else if (parsed?.error && res.status >= 400 && res.status < 500 && res.status !== 404) {
+          apiValidationError = parsed.error;
+        }
+      } catch {
+        // Network error — fallback locally below
       }
 
-      onOrderCreated(data.order as Order);
+      if (apiValidationError) {
+        throw new Error(apiValidationError);
+      }
+
+      let finalOrder: Order;
+      if (createdOrder) {
+        finalOrder = createdOrder;
+      } else {
+        // Resilient local order creation when API returns non-JSON (e.g., static preview / offline)
+        let nextNum = 1;
+        try {
+          const savedCounter = Number(localStorage.getItem('quiosk_local_order_counter') || '0');
+          nextNum = Math.max(1, (Number.isFinite(savedCounter) ? savedCounter : 0) + 1);
+          localStorage.setItem('quiosk_local_order_counter', String(nextNum));
+        } catch {
+          nextNum = Math.floor(100 + Math.random() * 899);
+        }
+
+        const now = new Date();
+        finalOrder = {
+          id: `#${String(nextNum).padStart(4, '0')}`,
+          orderNumber: nextNum,
+          customer: payload.customer,
+          items: payload.items,
+          orderCategory: payload.orderCategory,
+          tableNumber: payload.tableNumber,
+          deliveryFee: payload.deliveryFee,
+          subtotal: payload.subtotal,
+          discount: payload.discount,
+          couponCode: payload.couponCode,
+          total: payload.total,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus: computedPaymentStatus,
+          changeFor: payload.changeFor,
+          status: 'pedido_aceito',
+          createdAt: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          createdIso: now.toISOString(),
+          estimatedTime: payload.orderCategory === 'delivery' ? '30 - 45 min' : '15 - 25 min',
+          notes: payload.notes,
+        };
+
+        try {
+          const rawExisting = localStorage.getItem('quiosk_local_orders');
+          const existing: Order[] = rawExisting ? JSON.parse(rawExisting) : [];
+          localStorage.setItem(
+            'quiosk_local_orders',
+            JSON.stringify([finalOrder, ...existing].slice(0, 30))
+          );
+        } catch {
+          // ignore storage quota issues
+        }
+      }
+
+      onOrderCreated(finalOrder);
       onClose();
     } catch (err) {
       setErrorMsg(
@@ -420,92 +497,141 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             {paymentMethod === 'pix' && (
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-4">
                 <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {/* QR Code Display Box */}
-                  <div className="p-3 bg-white border border-neutral-300 rounded-xl shrink-0 flex flex-col items-center gap-1.5">
+                  {/* QR Code Dinâmico Display Box */}
+                  <div className="p-3 bg-white border-2 border-[#111111] rounded-xl shrink-0 flex flex-col items-center gap-2 shadow-sm">
                     <QRCodeSVG
                       value={pixCopiaECola}
-                      size={140}
+                      size={152}
                       level="M"
+                      includeMargin={false}
                       bgColor="#FFFFFF"
                       fgColor="#111111"
                     />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                      QR Code Pix · {formatCurrency(total)}
-                    </span>
+                    <div className="text-center">
+                      <span className="block text-[10px] font-extrabold uppercase tracking-wider text-neutral-500">
+                        QR Code Pix Dinâmico
+                      </span>
+                      <span className="block text-xs font-black text-[#8A0000] tabular-nums">
+                        {formatCurrency(total)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Pix Copia e Cola Field + Key Copy */}
                   <div className="flex-1 w-full space-y-3 text-xs">
                     <div>
-                      <p className="font-extrabold text-[#111111] text-sm">
-                        Pague via Pix Copia e Cola
-                      </p>
-                      <p className="text-neutral-600 mt-0.5">
-                        Escaneie o QR Code no aplicativo do seu banco ou copie o código Pix abaixo com o valor exato de{' '}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-extrabold text-[#111111] text-sm">
+                          Pague agora com Pix Dinâmico
+                        </p>
+                        <span className="px-2 py-0.5 rounded bg-[#111111] text-[#D4A017] text-[10px] font-extrabold uppercase tracking-wider">
+                          Valor Automático
+                        </span>
+                      </div>
+                      <p className="text-neutral-600 mt-1 leading-relaxed">
+                        Escaneie o QR Code no aplicativo do seu banco ou clique no campo abaixo para copiar o código Pix Copia e Cola no valor exato de{' '}
                         <strong className="text-[#8A0000] tabular-nums">
                           {formatCurrency(total)}
                         </strong>
+                        {orderCategory === 'delivery' && deliveryFee > 0
+                          ? ` (inclui entrega de ${formatCurrency(deliveryFee)})`
+                          : ''}
                         .
                       </p>
                     </div>
 
-                    {/* Campo Código Pix Copia e Cola */}
+                    {/* Campo de Texto Clicável: Código Pix Copia e Cola */}
                     <div className="space-y-1.5">
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600">
-                        Código Pix Copia e Cola
-                      </label>
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor="pix-copia-e-cola-input"
+                          className="block text-[11px] font-bold uppercase tracking-wider text-neutral-700"
+                        >
+                          Pix Copia e Cola (clique no campo para copiar)
+                        </label>
+                        {pixCodeCopied && (
+                          <span className="text-[11px] font-extrabold text-emerald-700">
+                            Copiado com sucesso!
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input
+                          id="pix-copia-e-cola-input"
                           type="text"
                           readOnly
                           value={pixCopiaECola}
-                          onFocus={(e) => e.currentTarget.select()}
-                          className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-lg font-mono text-[11px] text-[#111111] select-all"
-                          aria-label="Código Pix Copia e Cola"
+                          onClick={handleCopyPixCode}
+                          title="Clique para copiar o código Pix Copia e Cola"
+                          className={`flex-1 px-3 py-2.5 bg-white border rounded-lg font-mono text-[11px] text-[#111111] select-all cursor-pointer transition-colors ${
+                            pixCodeCopied
+                              ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20'
+                              : 'border-neutral-300 hover:border-[#8A0000]'
+                          }`}
+                          aria-label="Campo clicável para copiar Código Pix Copia e Cola"
                         />
                         <button
                           type="button"
                           onClick={handleCopyPixCode}
-                          className="px-4 py-2 bg-[#8A0000] hover:bg-[#6E0000] text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                          className={`px-4 py-2.5 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-colors ${
+                            pixCodeCopied
+                              ? 'bg-emerald-700 text-white'
+                              : 'bg-[#8A0000] hover:bg-[#6E0000] text-white'
+                          }`}
                         >
                           {pixCodeCopied ? (
-                            <Check className="w-3.5 h-3.5 text-[#D4A017]" />
+                            <Check className="w-3.5 h-3.5 text-white" />
                           ) : (
                             <Copy className="w-3.5 h-3.5 text-[#D4A017]" />
                           )}
                           <span>
-                            {pixCodeCopied ? 'Código Copiado!' : 'Copiar Pix'}
+                            {pixCodeCopied ? 'Copiado!' : 'Copiar Pix'}
                           </span>
                         </button>
                       </div>
                     </div>
 
-                    {/* Chave Pix Direta + Botão Automático */}
-                    <div className="pt-2 border-t border-neutral-200 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-bold text-[#111111]">
-                          Chave Celular:{' '}
-                          <span className="tabular-nums">{RESTAURANT_INFO.phone}</span>
+                    {/* Campo Clicável da Chave Pix Celular */}
+                    <div className="pt-2 border-t border-neutral-200 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold text-neutral-600">
+                          Favorecido: <strong className="text-[#111111]">{RESTAURANT_INFO.pixBeneficiary}</strong>
                         </p>
-                        <p className="text-[11px] text-neutral-500">
-                          Favorecido: {RESTAURANT_INFO.pixBeneficiary}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCopyPixKey}
-                        className="px-3 py-1.5 bg-[#111111] hover:bg-neutral-800 text-[#D4A017] rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
-                      >
-                        {pixKeyCopied ? (
-                          <Check className="w-3.5 h-3.5" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
+                        {pixKeyCopied && (
+                          <span className="text-[11px] font-extrabold text-emerald-700">
+                            Chave copiada!
+                          </span>
                         )}
-                        <span>
-                          {pixKeyCopied ? 'Chave Copiada!' : 'Copiar Chave Pix'}
-                        </span>
-                      </button>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={RESTAURANT_INFO.pixKey}
+                          onClick={handleCopyPixKey}
+                          title="Clique para copiar a chave Pix celular"
+                          aria-label="Chave Pix celular clicável"
+                          className={`flex-1 px-3 py-1.5 bg-white border rounded-lg font-mono text-xs font-bold text-[#111111] tabular-nums cursor-pointer transition-colors ${
+                            pixKeyCopied
+                              ? 'border-emerald-600 bg-emerald-50/40'
+                              : 'border-neutral-300 hover:border-[#111111]'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyPixKey}
+                          className="px-3 py-1.5 bg-[#111111] hover:bg-neutral-800 text-[#D4A017] rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          {pixKeyCopied ? (
+                            <Check className="w-3.5 h-3.5" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                          <span>
+                            {pixKeyCopied ? 'Chave Copiada!' : 'Copiar Chave Pix'}
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

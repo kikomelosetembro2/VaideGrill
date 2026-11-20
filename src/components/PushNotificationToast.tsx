@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Bell, CheckCircle2, ChefHat, Bike, Sparkles, X, RotateCcw } from 'lucide-react';
 import { OrderStatus } from '../types';
-import { playSound } from '../utils/helpers';
-import { RESTAURANT_INFO } from '../data/menuData';
 
 export interface PushNotificationData {
   id: string;
@@ -17,37 +15,18 @@ interface PushNotificationToastProps {
   notifications: PushNotificationData[];
   onDismiss: (id: string) => void;
   onOpenOrderTracking: (orderId: string) => void;
+  canPromptBrowserPush?: boolean;
+  onAcceptNotifications?: () => void;
 }
 
 export const PushNotificationToast: React.FC<PushNotificationToastProps> = ({
   notifications,
   onDismiss,
   onOpenOrderTracking,
+  canPromptBrowserPush = false,
+  onAcceptNotifications,
 }) => {
-  const [hasBrowserPushPermission, setHasBrowserPushPermission] = useState<boolean>(true);
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setHasBrowserPushPermission(Notification.permission === 'granted');
-    }
-  }, []);
-
-  const requestNotificationPermission = async () => {
-    if ('Notification' in window) {
-      try {
-        const perm = await Notification.requestPermission();
-        setHasBrowserPushPermission(perm === 'granted');
-        if (perm === 'granted') {
-          playSound('success');
-          new Notification(`${RESTAURANT_INFO.name}`, {
-            body: 'Notificações ativadas! Avisaremos assim que seu pedido estiver pronto.',
-          });
-        }
-      } catch {
-        // ignore permission prompt error
-      }
-    }
-  };
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const getStatusIcon = (status: OrderStatus) => {
     switch (status) {
@@ -71,21 +50,31 @@ export const PushNotificationToast: React.FC<PushNotificationToastProps> = ({
 
   return (
     <div className="fixed top-28 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
-      {!hasBrowserPushPermission && 'Notification' in window && (
-        <div className="pointer-events-auto bg-white border border-neutral-300 p-3 rounded-xl shadow-lg flex items-center justify-between gap-3 text-xs">
+      {canPromptBrowserPush && !bannerDismissed && onAcceptNotifications && (
+        <div className="pointer-events-auto bg-white border border-neutral-300 p-3 rounded-xl shadow-lg flex items-center justify-between gap-2.5 text-xs">
           <div className="flex items-center gap-2 text-[#111111]">
             <Bell className="w-4 h-4 text-[#8A0000] shrink-0" />
             <span className="font-medium">
-              Ativar alerta sonoro e na tela quando seu pedido ficar pronto?
+              Ativar alerta do sistema quando seu pedido ficar pronto?
             </span>
           </div>
-          <button
-            type="button"
-            onClick={requestNotificationPermission}
-            className="bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-3 py-1.5 rounded-lg text-[11px] shrink-0 cursor-pointer"
-          >
-            Ativar
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onAcceptNotifications}
+              className="bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-3 py-1.5 rounded-lg text-[11px] cursor-pointer"
+            >
+              Ativar
+            </button>
+            <button
+              type="button"
+              onClick={() => setBannerDismissed(true)}
+              className="p-1 text-neutral-400 hover:text-[#111111] cursor-pointer"
+              aria-label="Fechar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
