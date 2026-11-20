@@ -111,3 +111,76 @@ export interface CustomerSpendingReport {
   lastOrderId: string;
   topItem: string;
 }
+
+export interface EventReview {
+  id: string;
+  customerName: string;
+  customerMode: 'mesa_presencial' | 'delivery_retirada';
+  tableNumber?: string;
+  orderId?: string;
+  verifiedTableOrder?: boolean;
+  rating: number;
+  eventTitle?: string;
+  comment: string;
+  photoUrl?: string;
+  createdAt: string;
+  createdIso: string;
+}
+
+export interface LoyaltyReward {
+  id: string;
+  title: string;
+  description: string;
+  pointsCost: number;
+  discountAmount: number;
+  minOrder: number;
+  couponCode: string;
+}
+
+export interface LoyaltyRedemption {
+  id: string;
+  rewardId: string;
+  title: string;
+  couponCode: string;
+  discountAmount: number;
+  pointsSpent: number;
+  redeemedAt: string;
+}
+
+export interface LoyaltyAccountState {
+  phone: string;
+  totalSpent: number;
+  ordersCount: number;
+  earnedPoints: number;
+  redeemedPoints: number;
+  balance: number;
+  history: LoyaltyRedemption[];
+}
+
+export interface MonthlyPopularProductSummary {
+  id: string;
+  name: string;
+  shortName: string;
+  category: string;
+  price: number;
+  currentMonthQty: number;
+  previousMonthQty: number;
+  currentMonthRevenue: number;
+  previousMonthRevenue: number;
+  growthPercent: number;
+  totalQty: number;
+  totalRevenue: number;
+}
+
+export interface MonthlyComparativePoint {
+  monthKey: string;
+  monthLabel: string;
+  [productOrKey: string]: string | number;
+}
+
+export interface MonthlySalesAnalytics {
+  months: { monthKey: string; monthLabel: string }[];
+  topProducts: MonthlyPopularProductSummary[];
+  monthlyByProductUnits: MonthlyComparativePoint[];
+  monthlyByProductRevenue: MonthlyComparativePoint[];
+}

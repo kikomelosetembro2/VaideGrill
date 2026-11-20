@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   User,
@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   CartItem,
   Order,
@@ -22,6 +23,7 @@ import {
 } from '../types';
 import { RESTAURANT_INFO, ORDER_CATEGORY_LABELS } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
+import { generatePixCopiaECola } from '../utils/pixPayload';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -67,15 +69,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pixCopied, setPixCopied] = useState(false);
+  const [pixCodeCopied, setPixCodeCopied] = useState(false);
+  const [pixKeyCopied, setPixKeyCopied] = useState(false);
+  const [pixConfirmed, setPixConfirmed] = useState(false);
+
+  const pixCopiaECola = useMemo(
+    () =>
+      generatePixCopiaECola({
+        pixKey: RESTAURANT_INFO.pixKey,
+        merchantName: RESTAURANT_INFO.pixBeneficiary,
+        merchantCity: RESTAURANT_INFO.city,
+        amount: total,
+        txid: 'QUIOSKDAPRETA',
+      }),
+    [total]
+  );
 
   if (!isOpen) return null;
 
-  const handleCopyPix = () => {
+  const handleCopyPixCode = () => {
+    try {
+      navigator.clipboard.writeText(pixCopiaECola);
+      setPixCodeCopied(true);
+      setTimeout(() => setPixCodeCopied(false), 2500);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
+  const handleCopyPixKey = () => {
     try {
       navigator.clipboard.writeText(RESTAURANT_INFO.pixKey);
-      setPixCopied(true);
-      setTimeout(() => setPixCopied(false), 2500);
+      setPixKeyCopied(true);
+      setTimeout(() => setPixKeyCopied(false), 2500);
     } catch {
       // ignore clipboard errors
     }
@@ -133,7 +159,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         couponCode,
         total,
         paymentMethod,
-        paymentStatus: paymentMethod === 'pix' ? 'aprovado' : 'pendente',
+        paymentStatus:
+          paymentMethod === 'pix' && pixConfirmed ? 'aprovado' : 'pendente',
         changeFor:
           paymentMethod === 'dinheiro' && parsedChange && parsedChange > total
             ? parsedChange
@@ -391,23 +418,110 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {paymentMethod === 'pix' && (
-              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="text-xs space-y-0.5">
-                  <p className="font-bold text-[#111111]">
-                    Chave Pix (Celular): <span className="tabular-nums">{RESTAURANT_INFO.phone}</span>
-                  </p>
-                  <p className="text-neutral-500">
-                    Favorecido: {RESTAURANT_INFO.pixBeneficiary}
-                  </p>
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* QR Code Display Box */}
+                  <div className="p-3 bg-white border border-neutral-300 rounded-xl shrink-0 flex flex-col items-center gap-1.5">
+                    <QRCodeSVG
+                      value={pixCopiaECola}
+                      size={140}
+                      level="M"
+                      bgColor="#FFFFFF"
+                      fgColor="#111111"
+                    />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                      QR Code Pix · {formatCurrency(total)}
+                    </span>
+                  </div>
+
+                  {/* Pix Copia e Cola Field + Key Copy */}
+                  <div className="flex-1 w-full space-y-3 text-xs">
+                    <div>
+                      <p className="font-extrabold text-[#111111] text-sm">
+                        Pague via Pix Copia e Cola
+                      </p>
+                      <p className="text-neutral-600 mt-0.5">
+                        Escaneie o QR Code no aplicativo do seu banco ou copie o código Pix abaixo com o valor exato de{' '}
+                        <strong className="text-[#8A0000] tabular-nums">
+                          {formatCurrency(total)}
+                        </strong>
+                        .
+                      </p>
+                    </div>
+
+                    {/* Campo Código Pix Copia e Cola */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600">
+                        Código Pix Copia e Cola
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={pixCopiaECola}
+                          onFocus={(e) => e.currentTarget.select()}
+                          className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-lg font-mono text-[11px] text-[#111111] select-all"
+                          aria-label="Código Pix Copia e Cola"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyPixCode}
+                          className="px-4 py-2 bg-[#8A0000] hover:bg-[#6E0000] text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                        >
+                          {pixCodeCopied ? (
+                            <Check className="w-3.5 h-3.5 text-[#D4A017]" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-[#D4A017]" />
+                          )}
+                          <span>
+                            {pixCodeCopied ? 'Código Copiado!' : 'Copiar Pix'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chave Pix Direta + Botão Automático */}
+                    <div className="pt-2 border-t border-neutral-200 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-bold text-[#111111]">
+                          Chave Celular:{' '}
+                          <span className="tabular-nums">{RESTAURANT_INFO.phone}</span>
+                        </p>
+                        <p className="text-[11px] text-neutral-500">
+                          Favorecido: {RESTAURANT_INFO.pixBeneficiary}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyPixKey}
+                        className="px-3 py-1.5 bg-[#111111] hover:bg-neutral-800 text-[#D4A017] rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
+                      >
+                        {pixKeyCopied ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {pixKeyCopied ? 'Chave Copiada!' : 'Copiar Chave Pix'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCopyPix}
-                  className="px-3.5 py-2 bg-[#111111] text-[#D4A017] rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  {pixCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{pixCopied ? 'Chave Copiada' : 'Copiar Chave Pix'}</span>
-                </button>
+
+                {/* Confirmação pelo Cliente */}
+                <label className="flex items-center gap-2.5 p-3 rounded-lg bg-white border border-neutral-200 cursor-pointer hover:border-[#8A0000] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={pixConfirmed}
+                    onChange={(e) => setPixConfirmed(e.target.checked)}
+                    className="w-4 h-4 accent-[#8A0000]"
+                  />
+                  <span className="text-xs font-bold text-[#111111]">
+                    Já efetuei o pagamento via Pix e quero confirmar na comanda
+                  </span>
+                </label>
               </div>
             )}
 

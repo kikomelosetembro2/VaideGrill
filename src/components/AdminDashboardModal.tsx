@@ -21,7 +21,18 @@ import {
   Bike,
   Store,
   UtensilsCrossed,
+  TrendingUp,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
 import {
   MenuItem,
   Order,
@@ -29,6 +40,7 @@ import {
   OrderCategory,
   CategoryId,
   CustomerSpendingReport,
+  MonthlySalesAnalytics,
 } from '../types';
 import {
   ORDER_STATUS_LIST,
@@ -57,7 +69,21 @@ interface AdminDashboardModalProps {
   onProductsChanged: (nextProducts: MenuItem[]) => void;
 }
 
-type AdminTab = 'comandas' | 'clientes' | 'dashboard' | 'produtos';
+type AdminTab =
+  | 'comandas'
+  | 'clientes'
+  | 'mensal'
+  | 'dashboard'
+  | 'produtos'
+  | 'seguranca';
+
+const CHART_PRODUCT_COLORS = [
+  '#8A0000', // Crimson brand red
+  '#D4A017', // Mustard gold
+  '#111111', // Charcoal black
+  '#16A34A', // Fresh green
+  '#1D4ED8', // Royal blue
+];
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
@@ -100,6 +126,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerSort, setCustomerSort] = useState<'spent' | 'orders' | 'name'>('spent');
 
+  // Monthly Comparative Sales (Recharts) states
+  const [monthlySales, setMonthlySales] = useState<MonthlySalesAnalytics | null>(null);
+  const [monthlyChartView, setMonthlyChartView] = useState<'6m' | 'prev_curr'>('6m');
+  const [monthlyMetric, setMonthlyMetric] = useState<'units' | 'revenue'>('units');
+
   // Product CRUD states
   const [productSearch, setProductSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState<MenuItem | null>(null);
@@ -113,6 +144,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [formImage, setFormImage] = useState(CATEGORY_IMAGES.espetinhos);
   const [formSupportsDoneness, setFormSupportsDoneness] = useState(false);
   const [crudMessage, setCrudMessage] = useState<string | null>(null);
+
+  // Change admin credentials states
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newUsernameInput, setNewUsernameInput] = useState('admin');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
+  const [securityFeedback, setSecurityFeedback] = useState<{
+    type: 'ok' | 'err';
+    text: string;
+  } | null>(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
 
   // Check admin configuration status when opening
   useEffect(() => {
@@ -146,6 +188,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         averageTicket: validCnt > 0 ? totalRev / validCnt : 0,
         categoryCounts: data.byCategory || { delivery: 0, retirada: 0, mesa: 0 },
       });
+      if (data.monthlySales) {
+        setMonthlySales(data.monthlySales as MonthlySalesAnalytics);
+      }
     } catch {
       // ignore transient errors
     }
@@ -642,6 +687,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   icon: Users,
                 },
                 {
+                  id: 'mensal' as AdminTab,
+                  label: 'Vendas Mensais (Gráfico)',
+                  icon: TrendingUp,
+                },
+                {
                   id: 'dashboard' as AdminTab,
                   label: 'Dashboard & Mais Vendidos',
                   icon: BarChart3,
@@ -650,6 +700,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   id: 'produtos' as AdminTab,
                   label: `Cardápio & Produtos (${products.length})`,
                   icon: Package,
+                },
+                {
+                  id: 'seguranca' as AdminTab,
+                  label: 'Credenciais',
+                  icon: Lock,
                 },
               ].map((t) => {
                 const Icon = t.icon;
@@ -1123,6 +1178,399 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
+              {/* TAB: VENDAS MENSAIS COMPARATIVAS (RECHARTS) */}
+              {activeTab === 'mensal' && (
+                <div className="space-y-6">
+                  {/* Top Bar & Interactive Chart Controls */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-neutral-200">
+                    <div>
+                      <h3 className="font-black text-base text-[#111111]">
+                        Comparativo Mensal de Vendas · Produtos Mais Populares
+                      </h3>
+                      <p className="text-xs text-neutral-600 mt-0.5">
+                        Acompanhe a evolução mensal e compare os campeões de saída do
+                        Quiosk da Preta.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* View Toggle */}
+                      <div className="inline-flex rounded-lg border border-neutral-300 bg-neutral-50 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setMonthlyChartView('6m')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                            monthlyChartView === '6m'
+                              ? 'bg-[#8A0000] text-white'
+                              : 'text-neutral-700 hover:text-[#111111]'
+                          }`}
+                        >
+                          Últimos 6 Meses (Top 5)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMonthlyChartView('prev_curr')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                            monthlyChartView === 'prev_curr'
+                              ? 'bg-[#8A0000] text-white'
+                              : 'text-neutral-700 hover:text-[#111111]'
+                          }`}
+                        >
+                          Mês Atual vs Anterior (Top 8)
+                        </button>
+                      </div>
+
+                      {/* Metric Toggle */}
+                      <div className="inline-flex rounded-lg border border-neutral-300 bg-neutral-50 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setMonthlyMetric('units')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                            monthlyMetric === 'units'
+                              ? 'bg-[#111111] text-[#D4A017]'
+                              : 'text-neutral-700 hover:text-[#111111]'
+                          }`}
+                        >
+                          Unidades
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMonthlyMetric('revenue')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                            monthlyMetric === 'revenue'
+                              ? 'bg-[#111111] text-[#D4A017]'
+                              : 'text-neutral-700 hover:text-[#111111]'
+                          }`}
+                        >
+                          Faturamento (R$)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!monthlySales || monthlySales.topProducts.length === 0 ? (
+                    <div className="p-10 text-center bg-neutral-50 border border-neutral-200 rounded-xl text-sm text-neutral-600">
+                      Carregando dados comparativos de vendas mensais...
+                    </div>
+                  ) : (
+                    <>
+                      {/* KPI Summary Cards */}
+                      {(() => {
+                        const leader = monthlySales.topProducts[0];
+                        const totalCurrQty = monthlySales.topProducts.reduce(
+                          (acc, p) => acc + p.currentMonthQty,
+                          0
+                        );
+                        const totalPrevQty = monthlySales.topProducts.reduce(
+                          (acc, p) => acc + p.previousMonthQty,
+                          0
+                        );
+                        const totalCurrRev = monthlySales.topProducts.reduce(
+                          (acc, p) => acc + p.currentMonthRevenue,
+                          0
+                        );
+                        const aggGrowth =
+                          totalPrevQty > 0
+                            ? Math.round(
+                                ((totalCurrQty - totalPrevQty) / totalPrevQty) * 100
+                              )
+                            : 0;
+                        const currLabel =
+                          monthlySales.months[monthlySales.months.length - 1]
+                            ?.monthLabel || 'Mês Atual';
+                        const prevLabel =
+                          monthlySales.months[monthlySales.months.length - 2]
+                            ?.monthLabel || 'Mês Anterior';
+
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50">
+                              <p className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-500">
+                                Produto Líder · {currLabel}
+                              </p>
+                              <p className="text-base font-black text-[#8A0000] mt-1 truncate">
+                                {leader.name}
+                              </p>
+                              <p className="text-xs text-neutral-700 font-semibold mt-0.5 tabular-nums">
+                                {leader.currentMonthQty} un. ·{' '}
+                                {formatCurrency(leader.currentMonthRevenue)}
+                              </p>
+                            </div>
+
+                            <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50">
+                              <p className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-500">
+                                Top 8 em {currLabel}
+                              </p>
+                              <p className="text-2xl font-black text-[#111111] mt-1 tabular-nums">
+                                {totalCurrQty} un.
+                              </p>
+                              <p className="text-xs text-neutral-700 font-semibold mt-0.5 tabular-nums">
+                                {formatCurrency(totalCurrRev)} faturados
+                              </p>
+                            </div>
+
+                            <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50">
+                              <p className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-500">
+                                Comparativo vs. {prevLabel}
+                              </p>
+                              <p
+                                className={`text-2xl font-black mt-1 tabular-nums ${
+                                  aggGrowth >= 0
+                                    ? 'text-emerald-700'
+                                    : 'text-[#8A0000]'
+                                }`}
+                              >
+                                {aggGrowth >= 0 ? `+${aggGrowth}%` : `${aggGrowth}%`}
+                              </p>
+                              <p className="text-xs text-neutral-700 font-semibold mt-0.5 tabular-nums">
+                                Mês anterior: {totalPrevQty} un.
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Recharts BarChart Container */}
+                      <div className="border border-neutral-200 rounded-xl p-4 sm:p-5 bg-white">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                          <span className="text-xs font-extrabold uppercase tracking-wider text-[#111111]">
+                            {monthlyChartView === '6m'
+                              ? `Evolução Comparativa Mensal · Top 5 Produtos (${
+                                  monthlyMetric === 'units'
+                                    ? 'Unidades Vendidas'
+                                    : 'Receita em R$'
+                                })`
+                              : `Comparativo Direto: Mês Anterior vs. Mês Atual (${
+                                  monthlyMetric === 'units'
+                                    ? 'Unidades Vendidas'
+                                    : 'Receita em R$'
+                                })`}
+                          </span>
+                          <span className="text-[11px] text-neutral-500 font-semibold">
+                            Passe o cursor sobre as barras para ver os valores exatos
+                          </span>
+                        </div>
+
+                        <div className="w-full h-[360px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            {monthlyChartView === '6m' ? (
+                              <BarChart
+                                data={
+                                  monthlyMetric === 'units'
+                                    ? monthlySales.monthlyByProductUnits
+                                    : monthlySales.monthlyByProductRevenue
+                                }
+                                margin={{ top: 12, right: 16, left: 4, bottom: 8 }}
+                              >
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  stroke="#E5E7EB"
+                                  vertical={false}
+                                />
+                                <XAxis
+                                  dataKey="monthLabel"
+                                  tick={{ fontSize: 12, fontWeight: 700, fill: '#111111' }}
+                                  axisLine={{ stroke: '#D4D4D8' }}
+                                  tickLine={false}
+                                />
+                                <YAxis
+                                  tick={{ fontSize: 11, fontWeight: 600, fill: '#52525B' }}
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tickFormatter={(v: number) =>
+                                    monthlyMetric === 'revenue'
+                                      ? `R$${Math.round(v)}`
+                                      : String(v)
+                                  }
+                                />
+                                <Tooltip
+                                  contentStyle={{
+                                    backgroundColor: '#FFFFFF',
+                                    borderColor: '#D4D4D8',
+                                    borderRadius: '10px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                                  }}
+                                  formatter={(value) =>
+                                    monthlyMetric === 'revenue'
+                                      ? formatCurrency(Number(value ?? 0))
+                                      : `${value ?? 0} un.`
+                                  }
+                                />
+                                <Legend
+                                  wrapperStyle={{ fontSize: '11px', fontWeight: 700, paddingTop: '10px' }}
+                                />
+                                {monthlySales.topProducts.slice(0, 5).map((prod, idx) => (
+                                  <Bar
+                                    key={prod.id}
+                                    dataKey={prod.shortName}
+                                    name={prod.shortName}
+                                    fill={CHART_PRODUCT_COLORS[idx % CHART_PRODUCT_COLORS.length]}
+                                    radius={[4, 4, 0, 0]}
+                                    maxBarSize={26}
+                                  />
+                                ))}
+                              </BarChart>
+                            ) : (
+                              <BarChart
+                                data={monthlySales.topProducts.map((p) => ({
+                                  name: p.shortName,
+                                  anterior:
+                                    monthlyMetric === 'units'
+                                      ? p.previousMonthQty
+                                      : p.previousMonthRevenue,
+                                  atual:
+                                    monthlyMetric === 'units'
+                                      ? p.currentMonthQty
+                                      : p.currentMonthRevenue,
+                                }))}
+                                margin={{ top: 12, right: 16, left: 4, bottom: 38 }}
+                              >
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  stroke="#E5E7EB"
+                                  vertical={false}
+                                />
+                                <XAxis
+                                  dataKey="name"
+                                  interval={0}
+                                  angle={-18}
+                                  textAnchor="end"
+                                  height={56}
+                                  tick={{ fontSize: 11, fontWeight: 700, fill: '#111111' }}
+                                  axisLine={{ stroke: '#D4D4D8' }}
+                                  tickLine={false}
+                                />
+                                <YAxis
+                                  tick={{ fontSize: 11, fontWeight: 600, fill: '#52525B' }}
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tickFormatter={(v: number) =>
+                                    monthlyMetric === 'revenue'
+                                      ? `R$${Math.round(v)}`
+                                      : String(v)
+                                  }
+                                />
+                                <Tooltip
+                                  contentStyle={{
+                                    backgroundColor: '#FFFFFF',
+                                    borderColor: '#D4D4D8',
+                                    borderRadius: '10px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                                  }}
+                                  formatter={(value) =>
+                                    monthlyMetric === 'revenue'
+                                      ? formatCurrency(Number(value ?? 0))
+                                      : `${value ?? 0} un.`
+                                  }
+                                />
+                                <Legend
+                                  wrapperStyle={{ fontSize: '12px', fontWeight: 700, paddingTop: '8px' }}
+                                />
+                                <Bar
+                                  dataKey="anterior"
+                                  name={
+                                    monthlySales.months[monthlySales.months.length - 2]
+                                      ?.monthLabel || 'Mês Anterior'
+                                  }
+                                  fill="#111111"
+                                  radius={[4, 4, 0, 0]}
+                                  maxBarSize={28}
+                                />
+                                <Bar
+                                  dataKey="atual"
+                                  name={
+                                    monthlySales.months[monthlySales.months.length - 1]
+                                      ?.monthLabel || 'Mês Atual'
+                                  }
+                                  fill="#8A0000"
+                                  radius={[4, 4, 0, 0]}
+                                  maxBarSize={28}
+                                />
+                              </BarChart>
+                            )}
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Detailed Comparative Product Table */}
+                      <div className="border border-neutral-200 rounded-xl overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-neutral-100 border-b border-neutral-200 text-neutral-600 uppercase text-[11px]">
+                              <th className="py-3 px-4 font-extrabold">Produto Popular</th>
+                              <th className="py-3 px-4 font-extrabold text-right">
+                                {monthlySales.months[monthlySales.months.length - 2]
+                                  ?.monthLabel || 'Mês Anterior'}
+                              </th>
+                              <th className="py-3 px-4 font-extrabold text-right">
+                                {monthlySales.months[monthlySales.months.length - 1]
+                                  ?.monthLabel || 'Mês Atual'}
+                              </th>
+                              <th className="py-3 px-4 font-extrabold text-right">
+                                Variação
+                              </th>
+                              <th className="py-3 px-4 font-extrabold text-right">
+                                Faturamento Atual
+                              </th>
+                              <th className="py-3 px-4 font-extrabold text-right">
+                                Acumulado 6M
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-200">
+                            {monthlySales.topProducts.map((p, idx) => (
+                              <tr key={p.id} className="hover:bg-neutral-50">
+                                <td className="py-3 px-4 font-bold text-[#111111] flex items-center gap-2">
+                                  <span
+                                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                                    style={{
+                                      backgroundColor:
+                                        idx < 5
+                                          ? CHART_PRODUCT_COLORS[idx]
+                                          : '#9CA3AF',
+                                    }}
+                                  />
+                                  <span>{p.name}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right text-neutral-600 tabular-nums">
+                                  {p.previousMonthQty} un.
+                                </td>
+                                <td className="py-3 px-4 text-right font-black text-[#111111] tabular-nums">
+                                  {p.currentMonthQty} un.
+                                </td>
+                                <td className="py-3 px-4 text-right font-extrabold tabular-nums">
+                                  <span
+                                    className={
+                                      p.growthPercent >= 0
+                                        ? 'text-emerald-700'
+                                        : 'text-[#8A0000]'
+                                    }
+                                  >
+                                    {p.growthPercent >= 0
+                                      ? `+${p.growthPercent}%`
+                                      : `${p.growthPercent}%`}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right font-bold text-[#8A0000] tabular-nums">
+                                  {formatCurrency(p.currentMonthRevenue)}
+                                </td>
+                                <td className="py-3 px-4 text-right text-neutral-700 font-semibold tabular-nums">
+                                  {p.totalQty} un. · {formatCurrency(p.totalRevenue)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* TAB 4: PRODUTOS CRUD */}
               {activeTab === 'produtos' && (
                 <div className="space-y-5">
@@ -1362,6 +1810,157 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* TAB 5: CREDENCIAIS DO ADMINISTRADOR */}
+              {activeTab === 'seguranca' && (
+                <div className="max-w-lg space-y-5">
+                  <div>
+                    <h3 className="font-black text-base text-[#111111]">
+                      Credenciais de Login do Painel Administrativo
+                    </h3>
+                    <p className="text-xs text-neutral-600 mt-1">
+                      Atualize o usuário e a senha de acesso ao Painel Administrativo.
+                    </p>
+                  </div>
+
+                  {securityFeedback && (
+                    <div
+                      className={`p-3 rounded-lg border text-xs font-bold ${
+                        securityFeedback.type === 'ok'
+                          ? 'bg-amber-50 border-[#D4A017] text-[#111111]'
+                          : 'bg-red-50 border-[#8A0000] text-[#8A0000]'
+                      }`}
+                    >
+                      {securityFeedback.text}
+                    </div>
+                  )}
+
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setSecurityFeedback(null);
+                      if (newPasswordInput.length < 6) {
+                        setSecurityFeedback({
+                          type: 'err',
+                          text: 'A nova senha deve ter no mínimo 6 caracteres.',
+                        });
+                        return;
+                      }
+                      if (newPasswordInput !== confirmNewPasswordInput) {
+                        setSecurityFeedback({
+                          type: 'err',
+                          text: 'A confirmação da nova senha não confere.',
+                        });
+                        return;
+                      }
+                      setSecurityLoading(true);
+                      try {
+                        const res = await fetch('/api/admin/change-password', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${adminToken}`,
+                          },
+                          body: JSON.stringify({
+                            currentPassword: currentPasswordInput,
+                            newUsername: newUsernameInput.trim(),
+                            newPassword: newPasswordInput,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                          setSecurityFeedback({
+                            type: 'err',
+                            text: data.error || 'Erro ao atualizar credenciais.',
+                          });
+                        } else {
+                          setCurrentPasswordInput('');
+                          setNewPasswordInput('');
+                          setConfirmNewPasswordInput('');
+                          setUsername(data.username || newUsernameInput.trim());
+                          setSecurityFeedback({
+                            type: 'ok',
+                            text: `Credenciais atualizadas! Usuário ativo: ${data.username}.`,
+                          });
+                        }
+                      } catch {
+                        setSecurityFeedback({
+                          type: 'err',
+                          text: 'Erro de conexão com o servidor.',
+                        });
+                      } finally {
+                        setSecurityLoading(false);
+                      }
+                    }}
+                    className="p-5 rounded-xl border border-neutral-200 bg-neutral-50 space-y-4"
+                  >
+                    <div>
+                      <label className="block text-xs font-bold text-[#111111] mb-1">
+                        Usuário Administrador
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newUsernameInput}
+                        onChange={(e) => setNewUsernameInput(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111111] mb-1">
+                        Senha Atual *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={currentPasswordInput}
+                        onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111111] mb-1">
+                        Nova Senha (mínimo 6 caracteres) *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={newPasswordInput}
+                        onChange={(e) => setNewPasswordInput(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111111] mb-1">
+                        Confirmar Nova Senha *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={confirmNewPasswordInput}
+                        onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={securityLoading}
+                      className="bg-[#8A0000] hover:bg-[#6E0000] disabled:opacity-60 text-white font-bold px-5 py-2.5 rounded-lg text-xs cursor-pointer"
+                    >
+                      {securityLoading
+                        ? 'Atualizando...'
+                        : 'Atualizar Usuário e Senha'}
+                    </button>
+                  </form>
                 </div>
               )}
             </div>

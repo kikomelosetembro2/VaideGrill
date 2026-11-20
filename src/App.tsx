@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, Clock, Instagram, Facebook, ShieldCheck } from 'lucide-react';
+import {
+  Phone,
+  Clock,
+  Instagram,
+  Facebook,
+  ShieldCheck,
+  UtensilsCrossed,
+  Star,
+  Award,
+} from 'lucide-react';
 import {
   MenuItem,
   CartItem,
   Order,
   OrderCategory,
   CategoryId,
+  EventReview,
+  LoyaltyAccountState,
 } from './types';
 import {
   RESTAURANT_INFO,
@@ -18,6 +29,8 @@ import {
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { MenuSection } from './components/MenuSection';
+import { EventsSection } from './components/EventsSection';
+import { LoyaltyProgram } from './components/LoyaltyProgram';
 import { OriginalMenuModal } from './components/OriginalMenuModal';
 import { ProductCustomizeModal } from './components/ProductCustomizeModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -30,6 +43,8 @@ import {
   PushNotificationData,
 } from './components/PushNotificationToast';
 import { QuioskLogo } from './components/QuioskLogo';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { playSound } from './utils/helpers';
 import { triggerWhatsAppKitchenComanda } from './utils/whatsappReceipt';
 
@@ -37,12 +52,14 @@ export default function App() {
   // Core Store Data from Server
   const [products, setProducts] = useState<MenuItem[]>(MENU_ITEMS);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [events, setEvents] = useState<EventReview[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
 
   // Admin Bearer Token held strictly in React state memory
   const [adminToken, setAdminToken] = useState<string | null>(null);
 
   // UI Navigation & Modal States
+  const [activeMainTab, setActiveMainTab] = useState<'cardapio' | 'eventos'>('cardapio');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('todos');
   const [isOriginalMenuOpen, setIsOriginalMenuOpen] = useState(false);
   const [itemToCustomize, setItemToCustomize] = useState<MenuItem | null>(null);
@@ -52,6 +69,22 @@ export default function App() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isLoyaltyOpen, setIsLoyaltyOpen] = useState(false);
+
+  // User Profile & Loyalty Account State
+  const [userProfile, setUserProfile] = useState<{ name: string; phone: string }>({
+    name: 'Carlos Eduardo',
+    phone: '(68) 99988-3321',
+  });
+  const [loyaltyAccount, setLoyaltyAccount] = useState<LoyaltyAccountState>({
+    phone: '(68) 99988-3321',
+    totalSpent: 154,
+    ordersCount: 2,
+    earnedPoints: 154,
+    redeemedPoints: 0,
+    balance: 154,
+    history: [],
+  });
 
   // Shopping Cart States
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -119,6 +152,17 @@ export default function App() {
       })
       .catch(() => {
         // Fallback to static MENU_ITEMS if server not reachable yet
+      });
+
+    fetch('/api/events')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.events)) {
+          setEvents(data.events);
+        }
+      })
+      .catch(() => {
+        // ignore
       });
   }, []);
 
@@ -262,6 +306,26 @@ export default function App() {
     return true;
   };
 
+  // Sync loyalty points based on customer total spend
+  const fetchLoyalty = useCallback(async (phone: string) => {
+    try {
+      const res = await fetch(
+        `/api/loyalty?phone=${encodeURIComponent(phone)}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.balance === 'number') {
+        setLoyaltyAccount(data as LoyaltyAccountState);
+      }
+    } catch {
+      // ignore transient errors
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLoyalty(userProfile.phone);
+  }, [userProfile.phone, orders.length, fetchLoyalty]);
+
   // Order Created Callback: Auto-trigger kitchen WhatsApp comanda & show receipt
   const handleOrderCreated = (newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
@@ -271,6 +335,13 @@ export default function App() {
     setCartItems([]);
     setAppliedCoupon('');
     setIsReceiptModalOpen(true);
+
+    if (newOrder.customer?.phone) {
+      setUserProfile({
+        name: newOrder.customer.name,
+        phone: newOrder.customer.phone,
+      });
+    }
 
     // Send Kitchen Comanda via WhatsApp automatically
     triggerWhatsAppKitchenComanda(newOrder);
@@ -311,7 +382,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-[#111111] flex flex-col">
-      {/* Live Push & Sound Notifications */}
+      {/* Live Push & Sound Notifications & Offline Indicator */}
+      <OfflineIndicator />
       <PushNotificationToast
         notifications={notifications}
         onDismiss={(id) =>
@@ -327,29 +399,92 @@ export default function App() {
       <Header
         cartItemCount={cartItemCount}
         cartTotal={cartTotal}
+        loyaltyPoints={loyaltyAccount.balance}
         activeOrder={activeOrder}
+        activeMainTab={activeMainTab}
+        onChangeMainTab={(tab) => {
+          setActiveMainTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
         onOpenCart={() => setIsCartOpen(true)}
+        onOpenLoyalty={() => setIsLoyaltyOpen(true)}
         onOpenOriginalMenu={() => setIsOriginalMenuOpen(true)}
         onOpenTracking={() => setIsTrackingOpen(true)}
         onOpenAdminPanel={() => setIsAdminOpen(true)}
-        onScrollToMenu={scrollToMenu}
+        onScrollToMenu={() => {
+          setActiveMainTab('cardapio');
+          setTimeout(scrollToMenu, 40);
+        }}
       />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-10">
-        <HeroSection
-          onExploreMenu={scrollToMenu}
-          onOpenOriginalMenu={() => setIsOriginalMenuOpen(true)}
-          onOpenTracking={() => setIsTrackingOpen(true)}
-        />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-8">
+        {/* Visible Tab Bar: Cardápio Oficial vs Eventos & Avaliações */}
+        <div className="flex items-center gap-2 border-b border-neutral-200 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('cardapio')}
+            className={`px-4 py-2.5 rounded-lg text-sm font-extrabold flex items-center gap-2 border transition-colors cursor-pointer ${
+              activeMainTab === 'cardapio'
+                ? 'bg-[#8A0000] text-white border-[#8A0000]'
+                : 'bg-white text-neutral-700 border-neutral-300 hover:border-[#111111]'
+            }`}
+          >
+            <UtensilsCrossed
+              className={`w-4 h-4 ${
+                activeMainTab === 'cardapio' ? 'text-[#D4A017]' : 'text-neutral-500'
+              }`}
+            />
+            <span>Cardápio & Pedidos</span>
+          </button>
 
-        <MenuSection
-          products={products}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-          onSelectItemToCustomize={(item) => setItemToCustomize(item)}
-          onQuickAddToCart={handleQuickAddToCart}
-        />
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('eventos')}
+            className={`px-4 py-2.5 rounded-lg text-sm font-extrabold flex items-center gap-2 border transition-colors cursor-pointer ${
+              activeMainTab === 'eventos'
+                ? 'bg-[#8A0000] text-white border-[#8A0000]'
+                : 'bg-white text-neutral-700 border-neutral-300 hover:border-[#111111]'
+            }`}
+          >
+            <Star
+              className={`w-4 h-4 ${
+                activeMainTab === 'eventos' ? 'text-[#D4A017]' : 'text-neutral-500'
+              }`}
+            />
+            <span>Eventos & Avaliações ({events.length})</span>
+          </button>
+        </div>
+
+        {activeMainTab === 'cardapio' ? (
+          <div className="space-y-10">
+            <HeroSection
+              onExploreMenu={scrollToMenu}
+              onOpenOriginalMenu={() => setIsOriginalMenuOpen(true)}
+              onOpenTracking={() => setIsTrackingOpen(true)}
+            />
+
+            <MenuSection
+              products={products}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              onSelectItemToCustomize={(item) => setItemToCustomize(item)}
+              onQuickAddToCart={handleQuickAddToCart}
+            />
+          </div>
+        ) : (
+          <EventsSection
+            events={events}
+            adminToken={adminToken}
+            onEventCreated={(evt) => {
+              playSound('success');
+              setEvents((prev) => [evt, ...prev]);
+            }}
+            onEventDeleted={(id) =>
+              setEvents((prev) => prev.filter((e) => e.id !== id))
+            }
+          />
+        )}
       </main>
 
       {/* Clean Light Footer */}
@@ -386,22 +521,38 @@ export default function App() {
             <h4 className="font-extrabold uppercase tracking-wider text-[#111111]">
               Redes & Gestão
             </h4>
-            <p className="flex items-center gap-2 font-medium">
+            <a
+              href={RESTAURANT_INFO.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 font-bold text-[#111111] hover:text-[#8A0000] transition-colors"
+            >
               <Instagram className="w-4 h-4 text-[#8A0000]" />
               <span>{RESTAURANT_INFO.instagram}</span>
-            </p>
+            </a>
             <p className="flex items-center gap-2 font-medium">
               <Facebook className="w-4 h-4 text-[#111111]" />
               <span>Facebook: {RESTAURANT_INFO.facebook}</span>
             </p>
-            <button
-              type="button"
-              onClick={() => setIsAdminOpen(true)}
-              className="mt-1 inline-flex items-center gap-1.5 font-bold text-[#111111] hover:text-[#8A0000] cursor-pointer"
-            >
-              <ShieldCheck className="w-4 h-4 text-[#D4A017]" />
-              <span>Acessar Painel Administrativo</span>
-            </button>
+            <div className="pt-1 flex flex-col items-start gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsLoyaltyOpen(true)}
+                className="inline-flex items-center gap-1.5 font-bold text-[#111111] hover:text-[#8A0000] cursor-pointer"
+              >
+                <Award className="w-4 h-4 text-[#D4A017]" />
+                <span>Programa de Fidelidade ({loyaltyAccount.balance} pts)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAdminOpen(true)}
+                className="inline-flex items-center gap-1.5 font-bold text-[#111111] hover:text-[#8A0000] cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-[#D4A017]" />
+                <span>Acessar Painel Administrativo</span>
+              </button>
+              <PWAInstallButton variant="footer" />
+            </div>
           </div>
         </div>
       </footer>
@@ -500,6 +651,20 @@ export default function App() {
         }}
         products={products}
         onProductsChanged={setProducts}
+      />
+
+      <LoyaltyProgram
+        isOpen={isLoyaltyOpen}
+        onClose={() => setIsLoyaltyOpen(false)}
+        userProfile={userProfile}
+        onUpdateProfile={(prof) => setUserProfile(prof)}
+        loyaltyAccount={loyaltyAccount}
+        onRedeemSuccess={(updatedAccount, couponCode) => {
+          playSound('success');
+          setLoyaltyAccount(updatedAccount);
+          setAppliedCoupon(couponCode);
+        }}
+        onOpenCartWithCoupon={() => setIsCartOpen(true)}
       />
     </div>
   );

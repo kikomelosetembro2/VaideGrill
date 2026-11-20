@@ -3,6 +3,7 @@ import {
   IngredientOption,
   OrderStatus,
   OrderCategory,
+  LoyaltyReward,
 } from '../types';
 
 export const RESTAURANT_INFO = {
@@ -15,6 +16,7 @@ export const RESTAURANT_INFO = {
   whatsappRaw: '5568999442700',
   openingHours: 'Terça a Sexta · 18h às 23h',
   instagram: '@quioskdapreta.ofc',
+  instagramUrl: 'https://www.instagram.com/quioskdapreta.ofc/',
   facebook: 'Quiosk da Preta',
   pixKey: '68999442700',
   pixBeneficiary: 'QUIOSK DA PRETA ALIMENTOS',
@@ -126,7 +128,50 @@ export const RIO_BRANCO_NEIGHBORHOODS = [
 export const AVAILABLE_COUPONS: Record<string, { discountPercent?: number; discountFixed?: number; minOrder: number; label: string }> = {
   PRETA10: { discountPercent: 10, minOrder: 40, label: '10% OFF no cardápio Quiosk da Preta' },
   QUIOSK5: { discountFixed: 5, minOrder: 30, label: 'R$ 5,00 OFF em pedidos acima de R$ 30' },
+  FIDELIDADE5: { discountFixed: 5, minOrder: 20, label: 'Fidelidade: R$ 5,00 OFF no pedido' },
+  FIDELIDADE12: { discountFixed: 12, minOrder: 35, label: 'Fidelidade: R$ 12,00 OFF no pedido' },
+  FIDELIDADE25: { discountFixed: 25, minOrder: 60, label: 'Fidelidade: R$ 25,00 OFF no pedido' },
+  FIDELIDADE40: { discountFixed: 40, minOrder: 90, label: 'Fidelidade: R$ 40,00 OFF no pedido' },
 };
+
+export const LOYALTY_REWARDS: LoyaltyReward[] = [
+  {
+    id: 'rew_5',
+    title: 'Desconto de R$ 5,00',
+    description: 'Válido para pedidos a partir de R$ 20,00 no Delivery, Retirada ou Mesa.',
+    pointsCost: 100,
+    discountAmount: 5,
+    minOrder: 20,
+    couponCode: 'FIDELIDADE5',
+  },
+  {
+    id: 'rew_12',
+    title: 'Desconto de R$ 12,00',
+    description: 'Válido para pedidos a partir de R$ 35,00 em todo o cardápio.',
+    pointsCost: 220,
+    discountAmount: 12,
+    minOrder: 35,
+    couponCode: 'FIDELIDADE12',
+  },
+  {
+    id: 'rew_25',
+    title: 'Desconto de R$ 25,00',
+    description: 'Válido para pedidos a partir de R$ 60,00 em qualquer categoria.',
+    pointsCost: 400,
+    discountAmount: 25,
+    minOrder: 60,
+    couponCode: 'FIDELIDADE25',
+  },
+  {
+    id: 'rew_40',
+    title: 'Desconto de R$ 40,00',
+    description: 'Super desconto para pedidos a partir de R$ 90,00.',
+    pointsCost: 650,
+    discountAmount: 40,
+    minOrder: 90,
+    couponCode: 'FIDELIDADE40',
+  },
+];
 
 const COMPLEMENTO_PADRAO = ['Arroz', 'Vinagrete', 'Farofa', 'Macaxeira'];
 const SIMPLES_PADRAO = ['Farofa', 'Macaxeira'];

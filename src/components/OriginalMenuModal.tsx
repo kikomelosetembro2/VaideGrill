@@ -32,10 +32,15 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
                 {RESTAURANT_INFO.phone}
               </span>
               <span>·</span>
-              <span className="inline-flex items-center gap-1">
-                <Instagram className="w-3.5 h-3.5 text-neutral-500" />
+              <a
+                href={RESTAURANT_INFO.instagramUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 hover:text-[#8A0000]"
+              >
+                <Instagram className="w-3.5 h-3.5 text-[#8A0000]" />
                 {RESTAURANT_INFO.instagram}
-              </span>
+              </a>
             </p>
           </div>
           <button

@@ -1,6 +1,6 @@
 {
-  "name": "Lanchonete Vai de Grill - Sanduíches Artesanais",
-  "description": "App e cardápio online da Lanchonete Vai de Grill em Rio Branco, Acre. Sanduíches artesanais na brasa, clube de fidelidade, painel administrativo e delivery em tempo real.",
+  "name": "quioskdapreta",
+  "description": "quioskdapreta — Cardápio digital oficial do Quiosk da Preta: Espetinhos, Tira-Gosto, Pratos Árabes, Rabada no Tucupí e Bebidas com comanda automática via WhatsApp e painel administrativo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

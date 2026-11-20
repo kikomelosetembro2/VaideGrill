@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowDown, FileImage, Phone, Clock, Instagram } from 'lucide-react';
 import { CATEGORY_IMAGES, RESTAURANT_INFO } from '../data/menuData';
 import { QuioskLogo } from './QuioskLogo';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeroSectionProps {
   onExploreMenu: () => void;
@@ -50,10 +51,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {RESTAURANT_INFO.phone}
             </span>
             <span className="text-neutral-300">·</span>
-            <span className="flex items-center gap-1.5">
-              <Instagram className="w-4 h-4 text-neutral-500" />
-              {RESTAURANT_INFO.instagram}
-            </span>
+            <a
+              href={RESTAURANT_INFO.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-[#8A0000] transition-colors"
+            >
+              <Instagram className="w-4 h-4 text-[#8A0000]" />
+              <span>{RESTAURANT_INFO.instagram}</span>
+            </a>
           </div>
 
           {/* Primary Action & Secondary Actions */}
@@ -83,6 +89,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             >
               Acompanhar Comanda
             </button>
+
+            <PWAInstallButton variant="hero" />
           </div>
         </div>
 
