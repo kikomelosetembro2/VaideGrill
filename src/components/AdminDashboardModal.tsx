@@ -1756,8 +1756,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       >
                         <div className="flex items-center gap-3">
                           <img
-                            src={p.image}
+                            src={p.image || CATEGORY_IMAGES[p.category]}
                             alt={p.name}
+                            onError={(e) => {
+                              const fallback = CATEGORY_IMAGES[p.category];
+                              if (
+                                e.currentTarget.src !==
+                                window.location.origin + fallback
+                              ) {
+                                e.currentTarget.src = fallback;
+                              }
+                            }}
                             className="w-12 h-12 rounded-lg object-cover border border-neutral-200 shrink-0"
                           />
                           <div>

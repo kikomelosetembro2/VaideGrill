@@ -16,6 +16,7 @@ import {
   COMMON_EXTRAS,
   RIO_BRANCO_NEIGHBORHOODS,
   AVAILABLE_COUPONS,
+  CATEGORY_IMAGES,
 } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
 
@@ -209,14 +210,35 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       key={item.cartItemId}
                       className="p-3.5 rounded-xl border border-neutral-200 bg-neutral-50/70 space-y-2"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h4 className="font-bold text-sm text-[#111111]">
-                            {item.menuItem.name}
-                          </h4>
-                          <p className="text-xs font-extrabold text-[#8A0000] tabular-nums">
-                            {formatCurrency(item.totalPrice)}
-                          </p>
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={
+                              item.menuItem.image ||
+                              CATEGORY_IMAGES[item.menuItem.category]
+                            }
+                            alt={item.menuItem.name}
+                            onError={(e) => {
+                              const fallback =
+                                CATEGORY_IMAGES[item.menuItem.category] ||
+                                CATEGORY_IMAGES.espetinhos;
+                              if (
+                                e.currentTarget.src !==
+                                window.location.origin + fallback
+                              ) {
+                                e.currentTarget.src = fallback;
+                              }
+                            }}
+                            className="w-11 h-11 rounded-lg object-cover border border-neutral-200 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm text-[#111111] truncate">
+                              {item.menuItem.name}
+                            </h4>
+                            <p className="text-xs font-extrabold text-[#8A0000] tabular-nums">
+                              {formatCurrency(item.totalPrice)}
+                            </p>
+                          </div>
                         </div>
                         <button
                           type="button"

@@ -24,11 +24,11 @@ export const RESTAURANT_INFO = {
 };
 
 export const CATEGORY_IMAGES = {
-  espetinhos: '/src/assets/images/quiosk_espetinhos_brasa_1795201717534.jpg',
-  tira_gosto: '/src/assets/images/quiosk_tira_gosto_chapa_1795201717932.jpg',
-  pratos_arabes: '/src/assets/images/quiosk_pratos_arabes_1795201719378.jpg',
-  rabada: '/src/assets/images/quiosk_rabada_tucupi_1795201719477.jpg',
-  bebidas: '/src/assets/images/quiosk_bebidas_geladas_1795201719105.jpg',
+  espetinhos: '/images/quiosk_espetinhos_brasa_1795201717534.jpg',
+  tira_gosto: '/images/quiosk_tira_gosto_chapa_1795201717932.jpg',
+  pratos_arabes: '/images/quiosk_pratos_arabes_1795201719378.jpg',
+  rabada: '/images/quiosk_rabada_tucupi_1795201719477.jpg',
+  bebidas: '/images/quiosk_bebidas_geladas_1795201719105.jpg',
 };
 
 export const ORDER_STATUS_LIST: {

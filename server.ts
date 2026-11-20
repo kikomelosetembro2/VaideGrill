@@ -368,7 +368,7 @@ function createInitialEvents(): StoredEventReview[] {
       eventTitle: 'Noite de Sexta na Mesa',
       comment:
         'Atendimento excelente na mesa! A rabada no tucupí veio pelando e os espetinhos estavam no ponto perfeito.',
-      photoUrl: '/src/assets/images/quiosk_espetinhos_brasa_1795201717534.jpg',
+      photoUrl: '/images/quiosk_espetinhos_brasa_1795201717534.jpg',
       createdAt: new Date(iso2).toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit',
@@ -384,7 +384,7 @@ function createInitialEvents(): StoredEventReview[] {
       eventTitle: 'Aniversário com Tira-Gosto na Chapa',
       comment:
         'Comemoramos aqui no Quiosk da Preta! Filé na chapa acebolado com mandioca impecável e cerveja bem gelada.',
-      photoUrl: '/src/assets/images/quiosk_tira_gosto_chapa_1795201717932.jpg',
+      photoUrl: '/images/quiosk_tira_gosto_chapa_1795201717932.jpg',
       createdAt: new Date(iso1).toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit',
@@ -403,12 +403,21 @@ function loadStore(): StoreData {
         const events = Array.isArray(parsed.events)
           ? parsed.events
           : createInitialEvents();
+        const normImg = (img: unknown) =>
+          typeof img === 'string' && img.startsWith('/src/assets/images/')
+            ? img.replace('/src/assets/images/', '/images/')
+            : typeof img === 'string'
+            ? img
+            : '/images/quiosk_espetinhos_brasa_1795201717534.jpg';
         return {
           orderCounter: parsed.orderCounter || parsed.orders.length,
           adminCredential: parsed.adminCredential || null,
-          products: parsed.products,
+          products: parsed.products.map((p) => ({ ...p, image: normImg(p.image) })),
           orders: parsed.orders,
-          events,
+          events: events.map((ev) => ({
+            ...ev,
+            photoUrl: ev.photoUrl ? normImg(ev.photoUrl) : undefined,
+          })),
           loyaltyAccounts: parsed.loyaltyAccounts || {},
         };
       }
@@ -451,9 +460,10 @@ function constantTimeMatch(a: string, b: string): boolean {
 }
 
 function sanitizeImageUrl(url: unknown): string {
-  if (typeof url !== 'string') return '/src/assets/images/quiosk_espetinhos_brasa_1795201717534.jpg';
-  const trimmed = url.trim();
+  if (typeof url !== 'string') return '/images/quiosk_espetinhos_brasa_1795201717534.jpg';
+  const trimmed = url.trim().replace('/src/assets/images/', '/images/');
   if (
+    trimmed.startsWith('/images/') ||
     trimmed.startsWith('/src/assets/') ||
     trimmed.startsWith('/assets/') ||
     trimmed.startsWith('https://') ||
@@ -462,7 +472,7 @@ function sanitizeImageUrl(url: unknown): string {
   ) {
     return trimmed;
   }
-  return '/src/assets/images/quiosk_espetinhos_brasa_1795201717534.jpg';
+  return '/images/quiosk_espetinhos_brasa_1795201717534.jpg';
 }
 
 const store = loadStore();
@@ -741,6 +751,8 @@ function buildMonthlyPopularSalesReport(
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '5mb' }));
+  app.use('/images', express.static(path.resolve(process.cwd(), 'public/images')));
+  app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'src/assets/images')));
 
   // ======================== ADMIN AUTH ROUTES ========================
   app.get('/api/admin/auth-status', (req: Request, res: Response) => {

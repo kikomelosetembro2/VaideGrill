@@ -13,6 +13,7 @@ import {
   Star,
 } from 'lucide-react';
 import { MenuItem, CategoryId } from '../types';
+import { CATEGORY_IMAGES } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
 
 interface MenuSectionProps {
@@ -183,8 +184,14 @@ export const MenuSection: React.FC<MenuSectionProps> = ({
                 className="aspect-[4/3] w-full bg-neutral-100 relative overflow-hidden cursor-pointer group"
               >
                 <img
-                  src={item.image}
+                  src={item.image || CATEGORY_IMAGES[item.category]}
                   alt={item.name}
+                  onError={(e) => {
+                    const fallback = CATEGORY_IMAGES[item.category];
+                    if (e.currentTarget.src !== window.location.origin + fallback) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 {item.note && (
