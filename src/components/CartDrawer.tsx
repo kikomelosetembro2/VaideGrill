@@ -15,6 +15,7 @@ import {
   COMMON_EXTRAS,
   RIO_BRANCO_NEIGHBORHOODS,
   CATEGORY_IMAGES,
+  resolveProductImage,
 } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
 
@@ -194,21 +195,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
-                            src={
-                              item.menuItem.image ||
-                              CATEGORY_IMAGES[item.menuItem.category]
-                            }
+                            src={resolveProductImage(
+                              item.menuItem.image,
+                              item.menuItem.category
+                            )}
                             alt={item.menuItem.name}
                             onError={(e) => {
-                              const fallback =
+                              if (e.currentTarget.dataset.fallbackApplied) return;
+                              e.currentTarget.dataset.fallbackApplied = '1';
+                              e.currentTarget.src =
                                 CATEGORY_IMAGES[item.menuItem.category] ||
                                 CATEGORY_IMAGES.espetinhos;
-                              if (
-                                e.currentTarget.src !==
-                                window.location.origin + fallback
-                              ) {
-                                e.currentTarget.src = fallback;
-                              }
                             }}
                             className="w-11 h-11 rounded-lg object-cover border border-neutral-200 shrink-0"
                           />

@@ -71,14 +71,26 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{RESTAURANT_INFO.instagram}</span>
             </a>
           </div>
-          <a
-            href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-[#D4A017] hover:underline tabular-nums"
-          >
-            WhatsApp: {RESTAURANT_INFO.phone}
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href={`https://wa.me/${RESTAURANT_INFO.whatsappRaw}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-[#D4A017] hover:underline tabular-nums"
+            >
+              WhatsApp: {RESTAURANT_INFO.phone}
+            </a>
+            <button
+              type="button"
+              onClick={onOpenAdminPanel}
+              title="Abrir Painel Administrativo"
+              aria-label="Abrir Painel Administrativo"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#8A0000] hover:bg-[#6E0000] border border-[#D4A017]/60 text-white text-[10px] font-extrabold tracking-wide transition-colors cursor-pointer"
+            >
+              <ShieldCheck className="w-3 h-3 text-[#D4A017]" />
+              <span>Admin</span>
+            </button>
+          </div>
         </div>
       </div>
 

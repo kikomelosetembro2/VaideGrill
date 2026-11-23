@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Minus, Flame, Check, MessageSquare } from 'lucide-react';
 import { MenuItem, CartItem, CustomizationSelection } from '../types';
-import { COMMON_EXTRAS, CATEGORY_IMAGES } from '../data/menuData';
+import { COMMON_EXTRAS, CATEGORY_IMAGES, resolveProductImage } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
 
 interface ProductCustomizeModalProps {
@@ -89,13 +89,12 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
         <div className="flex items-start justify-between gap-4 p-5 border-b border-neutral-200">
           <div className="flex items-center gap-3.5">
             <img
-              src={item.image || CATEGORY_IMAGES[item.category]}
+              src={resolveProductImage(item.image, item.category)}
               alt={item.name}
               onError={(e) => {
-                const fallback = CATEGORY_IMAGES[item.category];
-                if (e.currentTarget.src !== window.location.origin + fallback) {
-                  e.currentTarget.src = fallback;
-                }
+                if (e.currentTarget.dataset.fallbackApplied) return;
+                e.currentTarget.dataset.fallbackApplied = '1';
+                e.currentTarget.src = CATEGORY_IMAGES[item.category];
               }}
               className="w-16 h-16 rounded-xl object-cover border border-neutral-200 shrink-0"
             />

@@ -184,3 +184,74 @@ export interface MonthlySalesAnalytics {
   monthlyByProductUnits: MonthlyComparativePoint[];
   monthlyByProductRevenue: MonthlyComparativePoint[];
 }
+
+export type ConvenioCompanyStatus = 'ativo' | 'inativo' | 'fatura_atraso';
+export type ConvenioBillingCycle = 'mensal' | 'quinzenal';
+export type MarmitexPaymentStatus = 'pendente' | 'pago' | 'vencido';
+
+export interface ConvenioCompany {
+  id: string;
+  companyName: string;
+  cnpj: string;
+  address: string;
+  phone: string;
+  email: string;
+  contractStartDate: string; // YYYY-MM-DD
+  billingCycle: ConvenioBillingCycle;
+  dueDay: number; // e.g. 5, 10, 15, 20...
+  authorizedPersonName: string;
+  authorizedPersonCpf: string;
+  status: ConvenioCompanyStatus;
+  createdAt: string;
+}
+
+export interface MarmitexPickup {
+  id: string;
+  companyId: string;
+  companyName: string;
+  companyCnpj: string;
+  pickedUpByName: string;
+  pickedUpByCpf: string;
+  pickupDateTime: string; // YYYY-MM-DDTHH:mm
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  dueDate: string; // YYYY-MM-DD
+  paymentStatus: MarmitexPaymentStatus;
+  paidAt?: string;
+  receiptNote?: string;
+  createdIso: string;
+}
+
+export interface ConvenioDueAlert {
+  companyId: string;
+  companyName: string;
+  companyCnpj: string;
+  phone: string;
+  email: string;
+  dueDate: string;
+  daysRemaining: number;
+  alertLevel: 'vencido' | 'hoje' | 'em_2_dias' | 'em_3_dias';
+  pendingQty: number;
+  pendingAmount: number;
+  pickupIds: string[];
+}
+
+export interface ConveniosConfig {
+  unitPrice: number;
+}
+
+export interface VisitorDailyPoint {
+  date: string;
+  label: string;
+  visits: number;
+}
+
+export interface VisitorStats {
+  totalVisits: number;
+  uniqueVisitors: number;
+  todayVisits: number;
+  lastVisitIso?: string;
+  last7Days: VisitorDailyPoint[];
+}
+

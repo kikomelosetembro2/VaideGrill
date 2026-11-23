@@ -13,6 +13,7 @@ import {
   BellRing,
   BellOff,
   CheckCircle2,
+  Eye,
 } from 'lucide-react';
 import {
   MenuItem,
@@ -23,6 +24,7 @@ import {
   EventReview,
   LoyaltyAccountState,
   LoyaltyReward,
+  VisitorStats,
 } from './types';
 import {
   RESTAURANT_INFO,
@@ -60,9 +62,9 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [events, setEvents] = useState<EventReview[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null);
 
-  // Admin Bearer Token held strictly in React state memory
-  const [adminToken, setAdminToken] = useState<string | null>(null);
+  // Admin Panel direct access tracking (sem barreira de login)
 
   // UI Navigation & Modal States
   const [activeMainTab, setActiveMainTab] = useState<'cardapio' | 'eventos'>('cardapio');
@@ -75,6 +77,7 @@ export default function App() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [adminAccessed, setAdminAccessed] = useState(false);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState(false);
   const [accessibilityMode, setAccessibilityMode] = useState<boolean>(() => {
     try {
@@ -350,6 +353,44 @@ export default function App() {
       })
       .catch(() => {
         // ignore
+      });
+
+    // Track application visitor once per browser session
+    let visitorId = '';
+    try {
+      visitorId = localStorage.getItem('quiosk_visitor_id') || '';
+      if (!visitorId) {
+        visitorId = `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        localStorage.setItem('quiosk_visitor_id', visitorId);
+      }
+    } catch {
+      visitorId = `v_${Date.now().toString(36)}`;
+    }
+
+    let alreadyTracked = false;
+    try {
+      alreadyTracked = sessionStorage.getItem('quiosk_visit_tracked') === '1';
+      if (!alreadyTracked) {
+        sessionStorage.setItem('quiosk_visit_tracked', '1');
+      }
+    } catch {
+      alreadyTracked = false;
+    }
+
+    const visitorEndpoint = alreadyTracked ? '/api/visitors' : '/api/visitors/track';
+    fetch(visitorEndpoint, {
+      method: alreadyTracked ? 'GET' : 'POST',
+      headers: alreadyTracked ? undefined : { 'Content-Type': 'application/json' },
+      body: alreadyTracked ? undefined : JSON.stringify({ visitorId }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.totalVisits === 'number') {
+          setVisitorStats(data as VisitorStats);
+        }
+      })
+      .catch(() => {
+        // ignore transient errors
       });
   }, []);
 
@@ -679,7 +720,7 @@ export default function App() {
         ) : (
           <EventsSection
             events={events}
-            adminToken={adminToken}
+            canModerate={adminAccessed}
             onEventCreated={(evt) => {
               playSound('success');
               setEvents((prev) => [evt, ...prev]);
@@ -749,7 +790,10 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsAdminOpen(true)}
+                onClick={() => {
+                  setAdminAccessed(true);
+                  setIsAdminOpen(true);
+                }}
                 className="inline-flex items-center gap-1.5 font-bold text-[#111111] hover:text-[#8A0000] cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4 text-[#D4A017]" />
@@ -768,6 +812,22 @@ export default function App() {
                   {accessibilityMode ? 'Ativado' : 'Desativado'}
                 </span>
               </button>
+              <div className="pt-1.5 inline-flex items-center gap-1.5 text-neutral-700 font-semibold tabular-nums">
+                <Eye className="w-4 h-4 text-[#8A0000]" />
+                <span>
+                  Visitantes:{' '}
+                  <strong className="text-[#111111]">
+                    {visitorStats ? visitorStats.totalVisits.toLocaleString('pt-BR') : '—'}
+                  </strong>
+                  {visitorStats ? (
+                    <span className="text-neutral-500 font-medium">
+                      {' '}
+                      · Hoje: {visitorStats.todayVisits.toLocaleString('pt-BR')} · Únicos:{' '}
+                      {visitorStats.uniqueVisitors.toLocaleString('pt-BR')}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -937,8 +997,6 @@ export default function App() {
       <AdminDashboardModal
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
-        adminToken={adminToken}
-        onSetAdminToken={setAdminToken}
         orders={orders}
         onRefreshOrders={fetchOrders}
         onUpdateOrderStatusLocal={handleUpdateOrderStatusLocal}
@@ -949,6 +1007,7 @@ export default function App() {
         }}
         products={products}
         onProductsChanged={setProducts}
+        visitorStats={visitorStats}
       />
 
       <LoyaltyProgram

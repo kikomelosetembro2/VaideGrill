@@ -17,7 +17,8 @@ import { CATEGORY_IMAGES, resolveProductImage } from '../data/menuData';
 
 interface EventsSectionProps {
   events: EventReview[];
-  adminToken: string | null;
+  adminToken?: string | null;
+  canModerate?: boolean;
   onEventCreated: (evt: EventReview) => void;
   onEventDeleted: (eventId: string) => void;
 }
@@ -25,9 +26,11 @@ interface EventsSectionProps {
 export const EventsSection: React.FC<EventsSectionProps> = ({
   events,
   adminToken,
+  canModerate = false,
   onEventCreated,
   onEventDeleted,
 }) => {
+  const showModerateControls = Boolean(canModerate || adminToken);
   const [customerName, setCustomerName] = useState('');
   const [customerMode, setCustomerMode] = useState<
     'mesa_presencial' | 'delivery_retirada'
@@ -159,10 +162,8 @@ export const EventsSection: React.FC<EventsSectionProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (!adminToken) return;
     const res = await fetch(`/api/events/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${adminToken}` },
     });
     if (res.ok) {
       onEventDeleted(id);
@@ -603,7 +604,7 @@ export const EventsSection: React.FC<EventsSectionProps> = ({
                         <span className="text-[11px] text-neutral-400 tabular-nums">
                           {rev.createdAt}
                         </span>
-                        {adminToken && (
+                        {showModerateControls && (
                           <button
                             type="button"
                             onClick={() => handleDelete(rev.id)}

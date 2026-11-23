@@ -133,6 +133,48 @@ interface StoredLoyaltyAccount {
   history: StoredLoyaltyRedemption[];
 }
 
+interface StoredConvenioCompany {
+  id: string;
+  companyName: string;
+  cnpj: string;
+  address: string;
+  phone: string;
+  email: string;
+  contractStartDate: string;
+  billingCycle: 'mensal' | 'quinzenal';
+  dueDay: number;
+  authorizedPersonName: string;
+  authorizedPersonCpf: string;
+  status: 'ativo' | 'inativo' | 'fatura_atraso';
+  createdAt: string;
+}
+
+interface StoredMarmitexPickup {
+  id: string;
+  companyId: string;
+  companyName: string;
+  companyCnpj: string;
+  pickedUpByName: string;
+  pickedUpByCpf: string;
+  pickupDateTime: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  dueDate: string;
+  paymentStatus: 'pendente' | 'pago' | 'vencido';
+  paidAt?: string;
+  receiptNote?: string;
+  createdIso: string;
+}
+
+interface StoredVisitorStats {
+  totalVisits: number;
+  uniqueVisitors: number;
+  dailyVisits: Record<string, number>;
+  visitorIds: string[];
+  lastVisitIso?: string;
+}
+
 interface StoreData {
   orderCounter: number;
   adminCredential: AdminCredential | null;
@@ -140,6 +182,10 @@ interface StoreData {
   orders: StoredOrder[];
   events: StoredEventReview[];
   loyaltyAccounts: Record<string, StoredLoyaltyAccount>;
+  conveniosConfig: { unitPrice: number };
+  convenioCompanies: StoredConvenioCompany[];
+  marmitexPickups: StoredMarmitexPickup[];
+  visitorStats: StoredVisitorStats;
 }
 
 const STORE_FILE = path.resolve(process.cwd(), '.quiosk-store.json');
@@ -394,6 +440,140 @@ function createInitialEvents(): StoredEventReview[] {
   ];
 }
 
+function fmtLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function addDays(base: Date, delta: number): Date {
+  const d = new Date(base.getTime());
+  d.setDate(d.getDate() + delta);
+  return d;
+}
+
+function createInitialConvenioCompanies(): StoredConvenioCompany[] {
+  const now = new Date();
+  const twoMonthsAgo = fmtLocalDate(addDays(now, -60));
+  const oneMonthAgo = fmtLocalDate(addDays(now, -32));
+  const twoWeeksAgo = fmtLocalDate(addDays(now, -16));
+  const dueInTwoDays = addDays(now, 2).getDate();
+  const dueToday = now.getDate();
+
+  return [
+    {
+      id: 'conv_comp_1',
+      companyName: 'Construtora Acre Forte Ltda',
+      cnpj: '12.345.678/0001-95',
+      address: 'Av. Getúlio Vargas, 1850 — Bosque, Rio Branco/AC',
+      phone: '(68) 99921-4400',
+      email: 'financeiro@acreforte.com.br',
+      contractStartDate: twoMonthsAgo,
+      billingCycle: 'mensal',
+      dueDay: Math.min(28, Math.max(1, dueInTwoDays)),
+      authorizedPersonName: 'Marcos Vinícius Almeida',
+      authorizedPersonCpf: '529.982.247-25',
+      status: 'ativo',
+      createdAt: twoMonthsAgo,
+    },
+    {
+      id: 'conv_comp_2',
+      companyName: 'Clínica Vida & Saúde Rio Branco',
+      cnpj: '28.910.456/0001-44',
+      address: 'Rua Rui Barbosa, 640 — Centro, Rio Branco/AC',
+      phone: '(68) 99945-1120',
+      email: 'adm@clinicavidaac.com.br',
+      contractStartDate: oneMonthAgo,
+      billingCycle: 'quinzenal',
+      dueDay: Math.min(28, Math.max(1, dueToday)),
+      authorizedPersonName: 'Fernanda Costa Oliveira',
+      authorizedPersonCpf: '111.444.777-35',
+      status: 'ativo',
+      createdAt: oneMonthAgo,
+    },
+    {
+      id: 'conv_comp_3',
+      companyName: 'Auto Peças Amazônia Sul EIRELI',
+      cnpj: '34.567.890/0001-12',
+      address: 'Via Chico Mendes, 920 — Triângulo, Rio Branco/AC',
+      phone: '(68) 99210-8833',
+      email: 'contas@amazoniapecas.com.br',
+      contractStartDate: twoWeeksAgo,
+      billingCycle: 'mensal',
+      dueDay: 5,
+      authorizedPersonName: 'Rodrigo Tavares Lima',
+      authorizedPersonCpf: '390.533.447-05',
+      status: 'fatura_atraso',
+      createdAt: twoWeeksAgo,
+    },
+  ];
+}
+
+function createInitialMarmitexPickups(
+  companies: StoredConvenioCompany[],
+  unitPrice = 19.9
+): StoredMarmitexPickup[] {
+  const now = new Date();
+  const c1 = companies[0];
+  const c2 = companies[1];
+  const c3 = companies[2];
+
+  const due2DaysStr = fmtLocalDate(addDays(now, 2));
+  const dueTodayStr = fmtLocalDate(now);
+  const overdueStr = fmtLocalDate(addDays(now, -3));
+  const nextMonthDueStr = fmtLocalDate(addDays(now, 14));
+  const prevPaidDueStr = fmtLocalDate(addDays(now, -18));
+
+  const makeEntry = (
+    id: string,
+    comp: StoredConvenioCompany,
+    daysAgo: number,
+    hourStr: string,
+    qty: number,
+    dueDate: string,
+    paymentStatus: 'pendente' | 'pago' | 'vencido',
+    note?: string,
+    overrideName?: string,
+    overrideCpf?: string
+  ): StoredMarmitexPickup => {
+    const dt = addDays(now, -daysAgo);
+    const datePart = fmtLocalDate(dt);
+    const totalAmount = Number((qty * unitPrice).toFixed(2));
+    return {
+      id,
+      companyId: comp.id,
+      companyName: comp.companyName,
+      companyCnpj: comp.cnpj,
+      pickedUpByName: overrideName || comp.authorizedPersonName,
+      pickedUpByCpf: overrideCpf || comp.authorizedPersonCpf,
+      pickupDateTime: `${datePart}T${hourStr}`,
+      quantity: qty,
+      unitPrice,
+      totalAmount,
+      dueDate,
+      paymentStatus,
+      paidAt: paymentStatus === 'pago' ? `${datePart} 17:30` : undefined,
+      receiptNote: note,
+      createdIso: dt.toISOString(),
+    };
+  };
+
+  return [
+    makeEntry('marm_seed_1', c1, 0, '11:45', 14, due2DaysStr, 'pendente', 'Retirada balcão - Turma Obra A'),
+    makeEntry('marm_seed_2', c2, 0, '12:10', 8, dueTodayStr, 'pendente', 'Recepção Clínica - Turno Manhã'),
+    makeEntry('marm_seed_3', c1, 1, '11:50', 12, due2DaysStr, 'pendente', 'Assinatura digital: Marcos V.'),
+    makeEntry('marm_seed_4', c3, 2, '12:05', 10, overdueStr, 'vencido', 'Oficina - Retirada balcão'),
+    makeEntry('marm_seed_5', c2, 3, '12:15', 9, dueTodayStr, 'pendente', 'Plantão enfermagem'),
+    makeEntry('marm_seed_6', c1, 4, '11:40', 15, due2DaysStr, 'pendente', 'Obra Centro - 15 un.'),
+    makeEntry('marm_seed_7', c3, 5, '12:20', 7, overdueStr, 'vencido', 'Retirado por auxiliar', 'Lucas Pereira Dias', '741.852.963-00'),
+    makeEntry('marm_seed_8', c2, 7, '11:55', 11, nextMonthDueStr, 'pendente', 'Reunião administrativa'),
+    makeEntry('marm_seed_9', c1, 10, '11:48', 13, prevPaidDueStr, 'pago', 'Quitação via Pix confirmada'),
+    makeEntry('marm_seed_10', c2, 13, '12:00', 10, prevPaidDueStr, 'pago', 'Pago junto à quinzena anterior'),
+    makeEntry('marm_seed_11', c1, 17, '11:42', 16, prevPaidDueStr, 'pago', 'Fechamento anterior liquidado'),
+  ];
+}
+
 function loadStore(): StoreData {
   try {
     if (fs.existsSync(STORE_FILE)) {
@@ -409,6 +589,43 @@ function loadStore(): StoreData {
             : typeof img === 'string'
             ? img
             : '/images/quiosk_espetinhos_brasa_1795201717534.jpg';
+
+        const conveniosConfig =
+          parsed.conveniosConfig && Number(parsed.conveniosConfig.unitPrice) > 0
+            ? { unitPrice: Number(parsed.conveniosConfig.unitPrice) }
+            : { unitPrice: 19.9 };
+        const convenioCompanies = Array.isArray(parsed.convenioCompanies)
+          ? parsed.convenioCompanies
+          : createInitialConvenioCompanies();
+        const marmitexPickups = Array.isArray(parsed.marmitexPickups)
+          ? parsed.marmitexPickups
+          : createInitialMarmitexPickups(convenioCompanies, conveniosConfig.unitPrice);
+
+        const visitorStats: StoredVisitorStats =
+          parsed.visitorStats && typeof parsed.visitorStats.totalVisits === 'number'
+            ? {
+                totalVisits: Math.max(0, Number(parsed.visitorStats.totalVisits) || 0),
+                uniqueVisitors: Math.max(0, Number(parsed.visitorStats.uniqueVisitors) || 0),
+                dailyVisits:
+                  parsed.visitorStats.dailyVisits &&
+                  typeof parsed.visitorStats.dailyVisits === 'object'
+                    ? parsed.visitorStats.dailyVisits
+                    : {},
+                visitorIds: Array.isArray(parsed.visitorStats.visitorIds)
+                  ? parsed.visitorStats.visitorIds.slice(-10000)
+                  : [],
+                lastVisitIso:
+                  typeof parsed.visitorStats.lastVisitIso === 'string'
+                    ? parsed.visitorStats.lastVisitIso
+                    : undefined,
+              }
+            : {
+                totalVisits: 0,
+                uniqueVisitors: 0,
+                dailyVisits: {},
+                visitorIds: [],
+              };
+
         return {
           orderCounter: parsed.orderCounter || parsed.orders.length,
           adminCredential: parsed.adminCredential || null,
@@ -419,6 +636,10 @@ function loadStore(): StoreData {
             photoUrl: ev.photoUrl ? normImg(ev.photoUrl) : undefined,
           })),
           loyaltyAccounts: parsed.loyaltyAccounts || {},
+          conveniosConfig,
+          convenioCompanies,
+          marmitexPickups,
+          visitorStats,
         };
       }
     }
@@ -428,6 +649,8 @@ function loadStore(): StoreData {
   const products = loadInitialProducts();
   const orders = createInitialOrders(products);
   const events = createInitialEvents();
+  const convenioCompanies = createInitialConvenioCompanies();
+  const marmitexPickups = createInitialMarmitexPickups(convenioCompanies, 19.9);
   const initial: StoreData = {
     orderCounter: 4,
     adminCredential: null,
@@ -435,6 +658,15 @@ function loadStore(): StoreData {
     orders,
     events,
     loyaltyAccounts: {},
+    conveniosConfig: { unitPrice: 19.9 },
+    convenioCompanies,
+    marmitexPickups,
+    visitorStats: {
+      totalVisits: 0,
+      uniqueVisitors: 0,
+      dailyVisits: {},
+      visitorIds: [],
+    },
   };
   saveStore(initial);
   return initial;
@@ -505,12 +737,8 @@ function getSession(req: Request): { username: string; expiresAt: number } | nul
   return sess;
 }
 
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const sess = getSession(req);
-  if (!sess) {
-    res.status(401).json({ error: 'Acesso restrito. Faça login no Painel Administrativo.' });
-    return;
-  }
+function requireAdmin(_req: Request, _res: Response, next: NextFunction): void {
+  // Painel administrativo com acesso direto sem barreira de login
   next();
 }
 
@@ -753,9 +981,11 @@ async function startServer() {
   app.use(express.json({ limit: '5mb' }));
   app.use('/images', express.static(path.resolve(process.cwd(), 'public/images')));
   app.use('/images', express.static(path.resolve(process.cwd(), 'dist/images')));
-  app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'public/images')));
-  app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'dist/images')));
-  app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'src/assets/images')));
+  if (process.env.NODE_ENV === 'production') {
+    app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'public/images')));
+    app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'dist/images')));
+    app.use('/src/assets/images', express.static(path.resolve(process.cwd(), 'src/assets/images')));
+  }
 
   // ======================== ADMIN AUTH ROUTES ========================
   app.get('/api/admin/auth-status', (req: Request, res: Response) => {
@@ -1128,6 +1358,105 @@ async function startServer() {
     res.json({ order });
   });
 
+  function computeConveniosDashboardSummary() {
+    const now = new Date();
+    const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const todayStr = fmtLocalDate(now);
+
+    let monthMarmitexQty = 0;
+    let monthRevenue = 0;
+    let totalReceivable = 0;
+    let overdueAmount = 0;
+    let overdueCount = 0;
+
+    for (const p of store.marmitexPickups) {
+      const isPaid = p.paymentStatus === 'pago';
+      const isOverdue = !isPaid && p.dueDate.slice(0, 10) < todayStr;
+      if (p.pickupDateTime.startsWith(currentMonthPrefix)) {
+        monthMarmitexQty += Number(p.quantity) || 0;
+        monthRevenue += Number(p.totalAmount) || 0;
+      }
+      if (!isPaid) {
+        totalReceivable += Number(p.totalAmount) || 0;
+        if (isOverdue) {
+          overdueAmount += Number(p.totalAmount) || 0;
+          overdueCount += 1;
+        }
+      }
+    }
+
+    const activeCompaniesCount = store.convenioCompanies.filter(
+      (c) => c.status !== 'inativo'
+    ).length;
+
+    return {
+      unitPrice: store.conveniosConfig.unitPrice,
+      activeCompaniesCount,
+      totalCompaniesCount: store.convenioCompanies.length,
+      monthMarmitexQty,
+      monthRevenue: Number(monthRevenue.toFixed(2)),
+      totalReceivable: Number(totalReceivable.toFixed(2)),
+      overdueAmount: Number(overdueAmount.toFixed(2)),
+      overdueCount,
+    };
+  }
+
+  function buildVisitorSummary() {
+    const now = new Date();
+    const todayKey = fmtLocalDate(now);
+    const todayVisits = Number(store.visitorStats.dailyVisits[todayKey]) || 0;
+    const last7Days: { date: string; label: string; visits: number }[] = [];
+
+    for (let offset = 6; offset >= 0; offset--) {
+      const d = addDays(now, -offset);
+      const dateStr = fmtLocalDate(d);
+      const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      last7Days.push({
+        date: dateStr,
+        label,
+        visits: Number(store.visitorStats.dailyVisits[dateStr]) || 0,
+      });
+    }
+
+    return {
+      totalVisits: store.visitorStats.totalVisits,
+      uniqueVisitors: store.visitorStats.uniqueVisitors,
+      todayVisits,
+      lastVisitIso: store.visitorStats.lastVisitIso,
+      last7Days,
+    };
+  }
+
+  // ======================== VISITOR COUNTER ROUTES ========================
+  app.get('/api/visitors', (_req: Request, res: Response) => {
+    res.json(buildVisitorSummary());
+  });
+
+  app.post('/api/visitors/track', (req: Request, res: Response) => {
+    const rawId = typeof req.body?.visitorId === 'string' ? req.body.visitorId.trim() : '';
+    const visitorId = rawId.slice(0, 80);
+    const now = new Date();
+    const todayKey = fmtLocalDate(now);
+
+    store.visitorStats.totalVisits += 1;
+    store.visitorStats.dailyVisits[todayKey] =
+      (Number(store.visitorStats.dailyVisits[todayKey]) || 0) + 1;
+    store.visitorStats.lastVisitIso = now.toISOString();
+
+    if (visitorId && !store.visitorStats.visitorIds.includes(visitorId)) {
+      store.visitorStats.visitorIds.push(visitorId);
+      if (store.visitorStats.visitorIds.length > 10000) {
+        store.visitorStats.visitorIds = store.visitorStats.visitorIds.slice(-10000);
+      }
+      store.visitorStats.uniqueVisitors += 1;
+    } else if (!visitorId && store.visitorStats.uniqueVisitors === 0) {
+      store.visitorStats.uniqueVisitors = store.visitorStats.totalVisits;
+    }
+
+    saveStore(store);
+    res.json(buildVisitorSummary());
+  });
+
   // ======================== ADMIN REPORTS ROUTE ========================
   app.get('/api/admin/reports', requireAdmin, (_req: Request, res: Response) => {
     const customerReport = buildCustomerSpendingReport(store.orders);
@@ -1140,6 +1469,8 @@ async function startServer() {
     };
 
     const monthlySales = buildMonthlyPopularSalesReport(store.orders, store.products);
+    const conveniosSummary = computeConveniosDashboardSummary();
+    const visitorStats = buildVisitorSummary();
 
     res.json({
       totalRevenue,
@@ -1148,6 +1479,8 @@ async function startServer() {
       byCategory,
       customerReport,
       monthlySales,
+      conveniosSummary,
+      visitorStats,
     });
   });
 
@@ -1340,6 +1673,354 @@ async function startServer() {
       redemption,
       account: computeLoyaltyForPhone(phone),
     });
+  });
+
+  // ======================== CONVÊNIOS CORPORATIVOS (MARMITEX) ROUTES ========================
+  function syncConvenioOverdueStates() {
+    const todayStr = fmtLocalDate(new Date());
+    let changed = false;
+
+    for (const p of store.marmitexPickups) {
+      if (p.paymentStatus === 'pendente' && p.dueDate.slice(0, 10) < todayStr) {
+        p.paymentStatus = 'vencido';
+        changed = true;
+      } else if (p.paymentStatus === 'vencido' && p.dueDate.slice(0, 10) >= todayStr) {
+        p.paymentStatus = 'pendente';
+        changed = true;
+      }
+    }
+
+    for (const comp of store.convenioCompanies) {
+      if (comp.status === 'inativo') continue;
+      const hasOverdue = store.marmitexPickups.some(
+        (p) => p.companyId === comp.id && p.paymentStatus === 'vencido'
+      );
+      const nextStatus: StoredConvenioCompany['status'] = hasOverdue
+        ? 'fatura_atraso'
+        : 'ativo';
+      if (comp.status !== nextStatus) {
+        comp.status = nextStatus;
+        changed = true;
+      }
+    }
+
+    if (changed) saveStore(store);
+  }
+
+  function calculateServerDueDate(
+    pickupDateStr: string,
+    billingCycle: 'mensal' | 'quinzenal',
+    dueDay: number
+  ): string {
+    const [yStr, mStr, dStr] = pickupDateStr.slice(0, 10).split('-');
+    const year = Number(yStr) || new Date().getFullYear();
+    const monthIdx = (Number(mStr) || 1) - 1;
+    const day = Number(dStr) || 1;
+    const clampedDueDay = Math.min(28, Math.max(1, Math.round(dueDay || 10)));
+
+    if (billingCycle === 'quinzenal') {
+      if (day <= 15) {
+        return fmtLocalDate(new Date(year, monthIdx, Math.max(16, Math.min(28, clampedDueDay + 5))));
+      }
+      return fmtLocalDate(new Date(year, monthIdx + 1, clampedDueDay));
+    }
+    return fmtLocalDate(new Date(year, monthIdx + 1, clampedDueDay));
+  }
+
+  app.get('/api/convenios', (_req: Request, res: Response) => {
+    syncConvenioOverdueStates();
+    res.json({
+      config: store.conveniosConfig,
+      companies: store.convenioCompanies,
+      pickups: store.marmitexPickups,
+    });
+  });
+
+  app.put('/api/convenios/config', (req: Request, res: Response) => {
+    const unitPrice = Number(req.body?.unitPrice);
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      res.status(400).json({ error: 'Informe um valor unitário válido maior que zero.' });
+      return;
+    }
+    store.conveniosConfig = { unitPrice: Number(unitPrice.toFixed(2)) };
+    saveStore(store);
+    res.json({ config: store.conveniosConfig });
+  });
+
+  app.post('/api/convenios/companies', (req: Request, res: Response) => {
+    const b = req.body || {};
+    const companyName = typeof b.companyName === 'string' ? b.companyName.trim() : '';
+    const cnpj = typeof b.cnpj === 'string' ? b.cnpj.trim() : '';
+    const address = typeof b.address === 'string' ? b.address.trim() : '';
+    const phone = typeof b.phone === 'string' ? b.phone.trim() : '';
+    const email = typeof b.email === 'string' ? b.email.trim() : '';
+    const contractStartDate =
+      typeof b.contractStartDate === 'string' && b.contractStartDate
+        ? b.contractStartDate.slice(0, 10)
+        : fmtLocalDate(new Date());
+    const billingCycle: 'mensal' | 'quinzenal' =
+      b.billingCycle === 'quinzenal' ? 'quinzenal' : 'mensal';
+    const dueDay = Math.min(28, Math.max(1, Math.round(Number(b.dueDay) || 10)));
+    const authorizedPersonName =
+      typeof b.authorizedPersonName === 'string' ? b.authorizedPersonName.trim() : '';
+    const authorizedPersonCpf =
+      typeof b.authorizedPersonCpf === 'string' ? b.authorizedPersonCpf.trim() : '';
+    const status: StoredConvenioCompany['status'] =
+      b.status === 'inativo'
+        ? 'inativo'
+        : b.status === 'fatura_atraso'
+        ? 'fatura_atraso'
+        : 'ativo';
+
+    if (!companyName || cnpj.replace(/\D/g, '').length !== 14 || !address || !phone || !email) {
+      res.status(400).json({
+        error: 'Preencha Razão Social, CNPJ (14 dígitos), Endereço, Telefone e E-mail.',
+      });
+      return;
+    }
+    if (!authorizedPersonName || authorizedPersonCpf.replace(/\D/g, '').length !== 11) {
+      res.status(400).json({
+        error: 'Preencha o Nome completo e CPF válido (11 dígitos) do responsável.',
+      });
+      return;
+    }
+
+    const newCompany: StoredConvenioCompany = {
+      id: `conv_comp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      companyName,
+      cnpj,
+      address,
+      phone,
+      email,
+      contractStartDate,
+      billingCycle,
+      dueDay,
+      authorizedPersonName,
+      authorizedPersonCpf,
+      status,
+      createdAt: fmtLocalDate(new Date()),
+    };
+
+    store.convenioCompanies.unshift(newCompany);
+    saveStore(store);
+    res.status(201).json({ company: newCompany });
+  });
+
+  app.put('/api/convenios/companies/:id', (req: Request, res: Response) => {
+    const idx = store.convenioCompanies.findIndex((c) => c.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ error: 'Empresa conveniada não encontrada.' });
+      return;
+    }
+    const existing = store.convenioCompanies[idx];
+    const b = req.body || {};
+    const updated: StoredConvenioCompany = {
+      ...existing,
+      companyName:
+        typeof b.companyName === 'string' && b.companyName.trim()
+          ? b.companyName.trim()
+          : existing.companyName,
+      cnpj: typeof b.cnpj === 'string' && b.cnpj.trim() ? b.cnpj.trim() : existing.cnpj,
+      address:
+        typeof b.address === 'string' && b.address.trim()
+          ? b.address.trim()
+          : existing.address,
+      phone: typeof b.phone === 'string' && b.phone.trim() ? b.phone.trim() : existing.phone,
+      email: typeof b.email === 'string' && b.email.trim() ? b.email.trim() : existing.email,
+      contractStartDate:
+        typeof b.contractStartDate === 'string' && b.contractStartDate
+          ? b.contractStartDate.slice(0, 10)
+          : existing.contractStartDate,
+      billingCycle:
+        b.billingCycle === 'quinzenal'
+          ? 'quinzenal'
+          : b.billingCycle === 'mensal'
+          ? 'mensal'
+          : existing.billingCycle,
+      dueDay:
+        b.dueDay !== undefined
+          ? Math.min(28, Math.max(1, Math.round(Number(b.dueDay) || existing.dueDay)))
+          : existing.dueDay,
+      authorizedPersonName:
+        typeof b.authorizedPersonName === 'string' && b.authorizedPersonName.trim()
+          ? b.authorizedPersonName.trim()
+          : existing.authorizedPersonName,
+      authorizedPersonCpf:
+        typeof b.authorizedPersonCpf === 'string' && b.authorizedPersonCpf.trim()
+          ? b.authorizedPersonCpf.trim()
+          : existing.authorizedPersonCpf,
+      status:
+        b.status === 'ativo' || b.status === 'inativo' || b.status === 'fatura_atraso'
+          ? b.status
+          : existing.status,
+    };
+
+    store.convenioCompanies[idx] = updated;
+    saveStore(store);
+    res.json({ company: updated });
+  });
+
+  app.delete('/api/convenios/companies/:id', (req: Request, res: Response) => {
+    const idx = store.convenioCompanies.findIndex((c) => c.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ error: 'Empresa conveniada não encontrada.' });
+      return;
+    }
+    store.convenioCompanies.splice(idx, 1);
+    saveStore(store);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/convenios/pickups', (req: Request, res: Response) => {
+    const b = req.body || {};
+    const company = store.convenioCompanies.find((c) => c.id === b.companyId);
+    if (!company) {
+      res.status(404).json({ error: 'Empresa conveniada não encontrada.' });
+      return;
+    }
+    if (company.status === 'inativo') {
+      res.status(400).json({
+        error: 'Esta empresa está inativa. Reative o convênio antes de lançar retiradas.',
+      });
+      return;
+    }
+
+    const quantity = Math.round(Number(b.quantity));
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      res.status(400).json({ error: 'Informe uma quantidade diária inteira (mínimo 1).' });
+      return;
+    }
+
+    const pickedUpByName =
+      typeof b.pickedUpByName === 'string' && b.pickedUpByName.trim()
+        ? b.pickedUpByName.trim()
+        : company.authorizedPersonName;
+    const pickedUpByCpf =
+      typeof b.pickedUpByCpf === 'string' && b.pickedUpByCpf.trim()
+        ? b.pickedUpByCpf.trim()
+        : company.authorizedPersonCpf;
+
+    const now = new Date();
+    const defaultDateTime = `${fmtLocalDate(now)}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const pickupDateTime =
+      typeof b.pickupDateTime === 'string' && b.pickupDateTime.length >= 10
+        ? b.pickupDateTime
+        : defaultDateTime;
+
+    const unitPrice = store.conveniosConfig.unitPrice || 19.9;
+    const totalAmount = Number((quantity * unitPrice).toFixed(2));
+    const dueDate =
+      typeof b.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.dueDate)
+        ? b.dueDate
+        : calculateServerDueDate(pickupDateTime, company.billingCycle, company.dueDay);
+
+    const todayStr = fmtLocalDate(now);
+    const paymentStatus: 'pendente' | 'pago' | 'vencido' =
+      dueDate < todayStr ? 'vencido' : 'pendente';
+
+    const pickup: StoredMarmitexPickup = {
+      id: `marm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      companyId: company.id,
+      companyName: company.companyName,
+      companyCnpj: company.cnpj,
+      pickedUpByName,
+      pickedUpByCpf,
+      pickupDateTime,
+      quantity,
+      unitPrice,
+      totalAmount,
+      dueDate,
+      paymentStatus,
+      receiptNote:
+        typeof b.receiptNote === 'string' && b.receiptNote.trim()
+          ? b.receiptNote.trim()
+          : undefined,
+      createdIso: now.toISOString(),
+    };
+
+    store.marmitexPickups.unshift(pickup);
+    syncConvenioOverdueStates();
+    saveStore(store);
+
+    res.status(201).json({ pickup, companies: store.convenioCompanies });
+  });
+
+  app.patch('/api/convenios/pickups/:id/pay', (req: Request, res: Response) => {
+    const pickup = store.marmitexPickups.find((p) => p.id === req.params.id);
+    if (!pickup) {
+      res.status(404).json({ error: 'Lançamento de retirada não encontrado.' });
+      return;
+    }
+
+    const markPaid = req.body?.paid !== false;
+    if (markPaid) {
+      pickup.paymentStatus = 'pago';
+      pickup.paidAt = new Date().toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } else {
+      const todayStr = fmtLocalDate(new Date());
+      pickup.paymentStatus = pickup.dueDate.slice(0, 10) < todayStr ? 'vencido' : 'pendente';
+      pickup.paidAt = undefined;
+    }
+
+    syncConvenioOverdueStates();
+    saveStore(store);
+    res.json({ pickup, companies: store.convenioCompanies });
+  });
+
+  app.post('/api/convenios/companies/:id/mark-paid', (req: Request, res: Response) => {
+    const company = store.convenioCompanies.find((c) => c.id === req.params.id);
+    if (!company) {
+      res.status(404).json({ error: 'Empresa não encontrada.' });
+      return;
+    }
+
+    const pickupIds: string[] | null = Array.isArray(req.body?.pickupIds)
+      ? req.body.pickupIds.map(String)
+      : null;
+
+    const paidAt = new Date().toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    let updatedCount = 0;
+    for (const p of store.marmitexPickups) {
+      if (p.companyId !== company.id || p.paymentStatus === 'pago') continue;
+      if (pickupIds && !pickupIds.includes(p.id)) continue;
+      p.paymentStatus = 'pago';
+      p.paidAt = paidAt;
+      updatedCount += 1;
+    }
+
+    syncConvenioOverdueStates();
+    saveStore(store);
+    res.json({
+      ok: true,
+      updatedCount,
+      companies: store.convenioCompanies,
+      pickups: store.marmitexPickups,
+    });
+  });
+
+  app.delete('/api/convenios/pickups/:id', (req: Request, res: Response) => {
+    const idx = store.marmitexPickups.findIndex((p) => p.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ error: 'Registro não encontrado.' });
+      return;
+    }
+    store.marmitexPickups.splice(idx, 1);
+    syncConvenioOverdueStates();
+    saveStore(store);
+    res.json({ ok: true, companies: store.convenioCompanies });
   });
 
   // Ensure /api/* always returns JSON on unknown routes or server errors

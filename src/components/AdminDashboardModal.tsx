@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X,
   ShieldCheck,
-  Lock,
-  LogOut,
   ChefHat,
   Users,
   BarChart3,
   Package,
   Search,
   Download,
+  Bell,
   BellRing,
   MessageCircle,
   Printer,
@@ -22,6 +21,9 @@ import {
   Store,
   UtensilsCrossed,
   TrendingUp,
+  Building2,
+  AlertTriangle,
+  Eye,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -41,6 +43,10 @@ import {
   CategoryId,
   CustomerSpendingReport,
   MonthlySalesAnalytics,
+  ConvenioCompany,
+  ConveniosConfig,
+  MarmitexPickup,
+  VisitorStats,
 } from '../types';
 import {
   ORDER_STATUS_LIST,
@@ -48,8 +54,19 @@ import {
   COMMON_EXTRAS,
   CATEGORY_IMAGES,
   getOrderStatusLabel,
+  resolveProductImage,
 } from '../data/menuData';
 import { formatCurrency } from '../utils/helpers';
+import {
+  DEFAULT_MARMITEX_UNIT_PRICE,
+  computeDueAlerts,
+  formatDateBR,
+  resolveEffectivePaymentStatus,
+} from '../utils/conveniosHelpers';
+import {
+  ConveniosMarmitexTab,
+  ConvenioSubTab,
+} from './ConveniosMarmitexTab';
 import {
   triggerWhatsAppKitchenComanda,
   triggerCustomerReadyWhatsApp,
@@ -58,8 +75,8 @@ import {
 interface AdminDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  adminToken: string | null;
-  onSetAdminToken: (token: string | null) => void;
+  adminToken?: string | null;
+  onSetAdminToken?: (token: string | null) => void;
   orders: Order[];
   onRefreshOrders: () => Promise<void>;
   onUpdateOrderStatusLocal: (updated: Order) => void;
@@ -67,15 +84,16 @@ interface AdminDashboardModalProps {
   onOpenReceiptModal: (order: Order) => void;
   products: MenuItem[];
   onProductsChanged: (nextProducts: MenuItem[]) => void;
+  visitorStats?: VisitorStats | null;
 }
 
 type AdminTab =
   | 'comandas'
+  | 'convenios'
   | 'clientes'
   | 'mensal'
   | 'dashboard'
-  | 'produtos'
-  | 'seguranca';
+  | 'produtos';
 
 const CHART_PRODUCT_COLORS = [
   '#8A0000', // Crimson brand red
@@ -88,8 +106,6 @@ const CHART_PRODUCT_COLORS = [
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
   onClose,
-  adminToken,
-  onSetAdminToken,
   orders,
   onRefreshOrders,
   onUpdateOrderStatusLocal,
@@ -97,17 +113,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onOpenReceiptModal,
   products,
   onProductsChanged,
+  visitorStats: externalVisitorStats = null,
 }) => {
-  // Auth states
-  const [authConfigured, setAuthConfigured] = useState<boolean | null>(null);
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
-
   // Dashboard tabs
   const [activeTab, setActiveTab] = useState<AdminTab>('comandas');
+  const [internalVisitorStats, setInternalVisitorStats] = useState<VisitorStats | null>(null);
+  const visitorStats = internalVisitorStats || externalVisitorStats;
+
+  // Convênios Corporativos (Marmitex) states
+  const [conveniosConfig, setConveniosConfig] = useState<ConveniosConfig>({
+    unitPrice: DEFAULT_MARMITEX_UNIT_PRICE,
+  });
+  const [convenioCompanies, setConvenioCompanies] = useState<ConvenioCompany[]>([]);
+  const [marmitexPickups, setMarmitexPickups] = useState<MarmitexPickup[]>([]);
+  const [convenioSubTab, setConvenioSubTab] = useState<ConvenioSubTab>('dashboard');
+  const [showBellDropdown, setShowBellDropdown] = useState(false);
 
   // Comandas filters
   const [categoryFilter, setCategoryFilter] = useState<'todas' | OrderCategory>('todas');
@@ -145,36 +165,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [formSupportsDoneness, setFormSupportsDoneness] = useState(false);
   const [crudMessage, setCrudMessage] = useState<string | null>(null);
 
-  // Change admin credentials states
-  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
-  const [newUsernameInput, setNewUsernameInput] = useState('admin');
-  const [newPasswordInput, setNewPasswordInput] = useState('');
-  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
-  const [securityFeedback, setSecurityFeedback] = useState<{
-    type: 'ok' | 'err';
-    text: string;
-  } | null>(null);
-  const [securityLoading, setSecurityLoading] = useState(false);
-
-  // Check admin configuration status when opening
-  useEffect(() => {
-    if (!isOpen) return;
-    fetch('/api/admin/auth-status')
-      .then((r) => r.json())
-      .then((d) => setAuthConfigured(!d.needsBootstrap))
-      .catch(() => setAuthConfigured(true));
-  }, [isOpen]);
-
-  // Load customer spending report when logged in
-  const loadReports = async (token: string) => {
+  const loadReports = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/reports', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        onSetAdminToken(null);
-        return;
-      }
+      const res = await fetch('/api/admin/reports');
       if (!res.ok) return;
       const data = await res.json();
       const reports: CustomerSpendingReport[] = data.customerReport || [];
@@ -191,16 +184,82 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       if (data.monthlySales) {
         setMonthlySales(data.monthlySales as MonthlySalesAnalytics);
       }
+      if (data.visitorStats) {
+        setInternalVisitorStats(data.visitorStats as VisitorStats);
+      }
     } catch {
       // ignore transient errors
     }
-  };
+  }, []);
+
+  const loadConvenios = useCallback(async () => {
+    try {
+      const res = await fetch('/api/convenios');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.config) setConveniosConfig(data.config as ConveniosConfig);
+      if (Array.isArray(data.companies)) {
+        setConvenioCompanies(data.companies as ConvenioCompany[]);
+      }
+      if (Array.isArray(data.pickups)) {
+        setMarmitexPickups(data.pickups as MarmitexPickup[]);
+      }
+    } catch {
+      // ignore transient errors
+    }
+  }, []);
 
   useEffect(() => {
-    if (isOpen && adminToken) {
-      loadReports(adminToken);
+    if (!isOpen) return;
+    void onRefreshOrders();
+    void loadReports();
+    void loadConvenios();
+  }, [isOpen, orders.length, loadReports, loadConvenios, onRefreshOrders]);
+
+  const dueAlerts = useMemo(
+    () => computeDueAlerts(convenioCompanies, marmitexPickups),
+    [convenioCompanies, marmitexPickups]
+  );
+
+  // Bell triggers prominently for 2 days before, today, or overdue (and lists up to 3 days)
+  const urgentBellAlerts = useMemo(
+    () => dueAlerts.filter((a) => a.daysRemaining <= 2),
+    [dueAlerts]
+  );
+
+  const conveniosKpis = useMemo(() => {
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let monthQty = 0;
+    let monthRev = 0;
+    let totalReceivable = 0;
+    let overdueAmount = 0;
+    let overdueCount = 0;
+
+    for (const p of marmitexPickups) {
+      const eff = resolveEffectivePaymentStatus(p);
+      if (p.pickupDateTime.startsWith(monthPrefix)) {
+        monthQty += p.quantity;
+        monthRev += p.totalAmount;
+      }
+      if (eff !== 'pago') {
+        totalReceivable += p.totalAmount;
+        if (eff === 'vencido') {
+          overdueAmount += p.totalAmount;
+          overdueCount += 1;
+        }
+      }
     }
-  }, [isOpen, adminToken, orders.length]);
+
+    return {
+      monthQty,
+      monthRev: Number(monthRev.toFixed(2)),
+      totalReceivable: Number(totalReceivable.toFixed(2)),
+      overdueAmount: Number(overdueAmount.toFixed(2)),
+      overdueCount,
+      activeCompanies: convenioCompanies.filter((c) => c.status !== 'inativo').length,
+    };
+  }, [marmitexPickups, convenioCompanies]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
@@ -257,68 +316,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-
-    if (authConfigured === false) {
-      if (password.length < 6) {
-        setAuthError('A senha de administrador deve ter no mínimo 6 caracteres.');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setAuthError('As senhas informadas não coincidem.');
-        return;
-      }
-    }
-
-    setAuthLoading(true);
-    try {
-      const endpoint =
-        authConfigured === false ? '/api/admin/bootstrap' : '/api/admin/login';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.token) {
-        setAuthError(data.error || 'Falha na autenticação.');
-        return;
-      }
-      setAuthConfigured(true);
-      setPassword('');
-      setConfirmPassword('');
-      onSetAdminToken(data.token);
-      await onRefreshOrders();
-      await loadReports(data.token);
-    } catch {
-      setAuthError('Erro de conexão com o servidor.');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    if (adminToken) {
-      try {
-        await fetch('/api/admin/logout', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${adminToken}` },
-        });
-      } catch {
-        // ignore
-      }
-    }
-    onSetAdminToken(null);
-  };
-
   const handleStatusChange = async (
     order: Order,
     status: OrderStatus,
     markReadyNotified = false
   ) => {
-    if (!adminToken) return;
     setUpdatingOrderId(order.id);
     try {
       const res = await fetch(
@@ -327,15 +329,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
           },
           body: JSON.stringify({ status, markReadyNotified }),
         }
       );
-      if (res.status === 401) {
-        onSetAdminToken(null);
-        return;
-      }
       const data = await res.json();
       if (res.ok && data.order) {
         onUpdateOrderStatusLocal(data.order as Order);
@@ -347,6 +344,82 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     } finally {
       setUpdatingOrderId(null);
     }
+  };
+
+  const handleExportOrdersCsv = () => {
+    const header = [
+      'Comanda ID',
+      'Numero',
+      'Data / Hora',
+      'Cliente',
+      'Telefone / WhatsApp',
+      'Categoria',
+      'Mesa / Endereco',
+      'Itens do Pedido',
+      'Qtd Total Itens',
+      'Subtotal (R$)',
+      'Taxa Entrega (R$)',
+      'Desconto (R$)',
+      'Total (R$)',
+      'Forma de Pagamento',
+      'Status Pagamento',
+      'Status do Pedido',
+      'Observacoes',
+    ];
+
+    const escapeCsv = (val: string | number) => {
+      const s = String(val ?? '').replace(/"/g, '""');
+      return `"${s}"`;
+    };
+
+    const rows = filteredOrders.map((ord) => {
+      const catLabel = ORDER_CATEGORY_LABELS[ord.orderCategory]?.label || ord.orderCategory;
+      const locationStr =
+        ord.orderCategory === 'mesa'
+          ? `Mesa ${ord.tableNumber || '-'}`
+          : ord.orderCategory === 'delivery' && ord.customer.address
+          ? `${ord.customer.address.street}, ${ord.customer.address.number} - ${ord.customer.address.neighborhood}`
+          : 'Retirada no balcão';
+      const itemsSummary = ord.items
+        .map((it) => `${it.quantity}x ${it.menuItem.name}`)
+        .join(' | ');
+      const totalItemsQty = ord.items.reduce((acc, it) => acc + it.quantity, 0);
+
+      return [
+        ord.id,
+        ord.orderNumber,
+        ord.createdIso
+          ? new Date(ord.createdIso).toLocaleString('pt-BR')
+          : ord.createdAt,
+        ord.customer.name,
+        ord.customer.phone,
+        catLabel,
+        locationStr,
+        itemsSummary,
+        totalItemsQty,
+        ord.subtotal.toFixed(2).replace('.', ','),
+        ord.deliveryFee.toFixed(2).replace('.', ','),
+        ord.discount.toFixed(2).replace('.', ','),
+        ord.total.toFixed(2).replace('.', ','),
+        ord.paymentMethod.toUpperCase(),
+        ord.paymentStatus === 'aprovado' ? 'Aprovado' : 'Pendente',
+        getOrderStatusLabel(ord.status),
+        ord.notes || '',
+      ];
+    });
+
+    const csv =
+      '\uFEFF' +
+      [header, ...rows].map((row) => row.map(escapeCsv).join(';')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `quiosk-da-preta-pedidos.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleExportCustomerCsv = () => {
@@ -437,7 +510,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminToken) return;
     const priceNum = Number(formPrice.replace(',', '.'));
     if (!formName.trim() || !Number.isFinite(priceNum) || priceNum < 0) {
       setCrudMessage('Informe nome válido e preço numérico.');
@@ -466,7 +538,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${adminToken}`,
             },
             body: JSON.stringify(payload),
           }
@@ -488,7 +559,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
           },
           body: JSON.stringify(payload),
         });
@@ -508,13 +578,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   };
 
   const handleToggleProductAvailability = async (p: MenuItem) => {
-    if (!adminToken) return;
     const nextAvail = p.isAvailable === false;
     const res = await fetch(`/api/products/${encodeURIComponent(p.id)}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
       },
       body: JSON.stringify({ isAvailable: nextAvail }),
     });
@@ -529,10 +597,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!adminToken) return;
     const res = await fetch(`/api/products/${encodeURIComponent(productId)}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${adminToken}` },
     });
     if (res.ok) {
       onProductsChanged(products.filter((p) => p.id !== productId));
@@ -559,17 +625,106 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {adminToken && (
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="px-3 py-1.5 rounded-lg border border-neutral-700 text-xs font-bold text-neutral-200 hover:bg-neutral-800 flex items-center gap-1.5 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5 text-[#D4A017]" />
-                <span>Sair</span>
-              </button>
+          <div className="flex items-center gap-2 relative">
+            {/* Sininho de Notificações e Alertas de Fatura (Convênios) */}
+            <button
+              type="button"
+              onClick={() => setShowBellDropdown((prev) => !prev)}
+              className={`relative px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                urgentBellAlerts.length > 0
+                  ? 'border-[#8A0000] bg-[#8A0000] text-white'
+                  : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
+              }`}
+              title="Alertas de Vencimento de Faturas (Convênios)"
+            >
+              {urgentBellAlerts.length > 0 ? (
+                <BellRing className="w-4 h-4 text-[#D4A017]" />
+              ) : (
+                <Bell className="w-4 h-4 text-[#D4A017]" />
+              )}
+              <span className="hidden sm:inline">Alertas</span>
+              {dueAlerts.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded bg-[#D4A017] text-[#111111] text-[10px] font-black tabular-nums">
+                  {dueAlerts.length}
+                </span>
+              )}
+            </button>
+
+            {showBellDropdown && (
+              <div className="absolute right-10 top-11 z-50 w-80 sm:w-96 bg-white text-[#111111] border border-neutral-300 rounded-xl shadow-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                  <span className="font-black text-xs uppercase tracking-wider text-[#111111]">
+                    Alertas de Faturas · Convênios ({dueAlerts.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowBellDropdown(false)}
+                    className="text-neutral-400 hover:text-[#111111] cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {dueAlerts.length === 0 ? (
+                  <p className="text-xs text-neutral-600 py-2">
+                    Nenhuma fatura em atraso, vencendo hoje ou nos próximos dias.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {dueAlerts.map((al) => (
+                      <div
+                        key={`${al.companyId}_${al.dueDate}`}
+                        className={`p-2.5 rounded-lg border text-xs space-y-1 ${
+                          al.alertLevel === 'vencido'
+                            ? 'bg-red-50 border-[#8A0000]'
+                            : al.alertLevel === 'hoje'
+                            ? 'bg-amber-50 border-[#D4A017]'
+                            : 'bg-neutral-50 border-neutral-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-[#111111] truncate">
+                            {al.companyName}
+                          </span>
+                          <span
+                            className={`text-[10px] font-black shrink-0 ${
+                              al.alertLevel === 'vencido'
+                                ? 'text-[#8A0000]'
+                                : 'text-[#111111]'
+                            }`}
+                          >
+                            {al.alertLevel === 'vencido'
+                              ? `Atraso ${Math.abs(al.daysRemaining)}d`
+                              : al.alertLevel === 'hoje'
+                              ? 'Vence Hoje'
+                              : `Faltam ${al.daysRemaining}d`}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-600 tabular-nums">
+                          Venc: {formatDateBR(al.dueDate)} ·{' '}
+                          <strong className="text-[#8A0000]">
+                            {formatCurrency(al.pendingAmount)}
+                          </strong>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBellDropdown(false);
+                    setActiveTab('convenios');
+                    setConvenioSubTab('dashboard');
+                  }}
+                  className="w-full py-2 rounded-lg bg-[#111111] text-[#D4A017] font-bold text-xs cursor-pointer"
+                >
+                  Abrir Painel de Convênios & Cobranças
+                </button>
+              </div>
             )}
+
             <button
               type="button"
               onClick={onClose}
@@ -581,208 +736,129 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
         </div>
 
-        {/* If NOT authenticated: Login / Initial Setup Screen */}
-        {!adminToken ? (
-          <div className="flex-1 flex items-center justify-center p-6 bg-neutral-50">
-            <form
-              onSubmit={handleAuthSubmit}
-              className="bg-white border border-neutral-200 rounded-2xl p-6 sm:p-8 max-w-md w-full space-y-5 shadow-lg"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-red-50 border border-[#8A0000]/20 flex items-center justify-center">
-                  <Lock className="w-5 h-5 text-[#8A0000]" />
-                </div>
-                <div>
-                  <h3 className="font-black text-lg text-[#111111]">
-                    {authConfigured === false
-                      ? 'Configurar Acesso Administrativo'
-                      : 'Login do Painel Administrativo'}
-                  </h3>
-                  <p className="text-xs text-neutral-500">
-                    {authConfigured === false
-                      ? 'Primeiro acesso: defina o usuário e senha do gerente.'
-                      : 'Entre com suas credenciais de administrador para gerenciar comandas e relatórios.'}
-                  </p>
-                </div>
-              </div>
-
-              {authError && (
-                <div className="p-3 rounded-lg bg-red-50 border border-[#8A0000] text-xs font-bold text-[#8A0000]">
-                  {authError}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#111111] mb-1">
-                    Usuário
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-lg text-sm text-[#111111] focus:outline-none focus:border-[#8A0000]"
+        {/* Direct Authenticated Content (Sem barreira de login) */}
+        <>
+          {/* Navigation Tabs */}
+          <div className="px-5 py-3 border-b border-neutral-200 bg-neutral-50 flex items-center gap-2 overflow-x-auto">
+            {[
+              {
+                id: 'comandas' as AdminTab,
+                label: `Comandas & Cozinha (${orders.length})`,
+                icon: ChefHat,
+              },
+              {
+                id: 'convenios' as AdminTab,
+                label: `Convênios (Marmitex)${dueAlerts.length > 0 ? ` · ${dueAlerts.length} alerta(s)` : ''}`,
+                icon: Building2,
+              },
+              {
+                id: 'clientes' as AdminTab,
+                label: `Relatório de Gastos por Cliente (${customerReports.length})`,
+                icon: Users,
+              },
+              {
+                id: 'mensal' as AdminTab,
+                label: 'Vendas Mensais (Gráfico)',
+                icon: TrendingUp,
+              },
+              {
+                id: 'dashboard' as AdminTab,
+                label: 'Dashboard & Vendas a Prazo',
+                icon: BarChart3,
+              },
+              {
+                id: 'produtos' as AdminTab,
+                label: `Cardápio & Produtos (${products.length})`,
+                icon: Package,
+              },
+            ].map((t) => {
+              const Icon = t.icon;
+              const active = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveTab(t.id)}
+                  className={`px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-2 border shrink-0 transition-colors cursor-pointer ${
+                    active
+                      ? 'bg-[#8A0000] text-white border-[#8A0000]'
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:border-[#111111]'
+                  }`}
+                >
+                  <Icon
+                    className={`w-4 h-4 ${active ? 'text-[#D4A017]' : 'text-neutral-500'}`}
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#111111] mb-1">
-                    Senha {authConfigured === false ? '(mínimo 6 caracteres)' : ''}
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-lg text-sm text-[#111111] focus:outline-none focus:border-[#8A0000]"
-                  />
-                </div>
-
-                {authConfigured === false && (
-                  <div>
-                    <label className="block text-xs font-bold text-[#111111] mb-1">
-                      Confirmar Senha
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-lg text-sm text-[#111111] focus:outline-none focus:border-[#8A0000]"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="w-full bg-[#8A0000] hover:bg-[#6E0000] disabled:opacity-60 text-white font-extrabold py-3 px-4 rounded-lg text-sm transition-colors cursor-pointer"
-              >
-                {authLoading
-                  ? 'Verificando...'
-                  : authConfigured === false
-                  ? 'Salvar Senha e Entrar'
-                  : 'Entrar no Painel'}
-              </button>
-            </form>
+                  <span>{t.label}</span>
+                </button>
+              );
+            })}
           </div>
-        ) : (
-          /* Authenticated Content */
-          <>
-            {/* Navigation Tabs */}
-            <div className="px-5 py-3 border-b border-neutral-200 bg-neutral-50 flex items-center gap-2 overflow-x-auto">
-              {[
-                {
-                  id: 'comandas' as AdminTab,
-                  label: `Comandas & Cozinha (${orders.length})`,
-                  icon: ChefHat,
-                },
-                {
-                  id: 'clientes' as AdminTab,
-                  label: `Relatório de Gastos por Cliente (${customerReports.length})`,
-                  icon: Users,
-                },
-                {
-                  id: 'mensal' as AdminTab,
-                  label: 'Vendas Mensais (Gráfico)',
-                  icon: TrendingUp,
-                },
-                {
-                  id: 'dashboard' as AdminTab,
-                  label: 'Dashboard & Mais Vendidos',
-                  icon: BarChart3,
-                },
-                {
-                  id: 'produtos' as AdminTab,
-                  label: `Cardápio & Produtos (${products.length})`,
-                  icon: Package,
-                },
-                {
-                  id: 'seguranca' as AdminTab,
-                  label: 'Credenciais',
-                  icon: Lock,
-                },
-              ].map((t) => {
-                const Icon = t.icon;
-                const active = activeTab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setActiveTab(t.id)}
-                    className={`px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-2 border shrink-0 transition-colors cursor-pointer ${
-                      active
-                        ? 'bg-[#8A0000] text-white border-[#8A0000]'
-                        : 'bg-white text-neutral-700 border-neutral-300 hover:border-[#111111]'
-                    }`}
-                  >
-                    <Icon
-                      className={`w-4 h-4 ${active ? 'text-[#D4A017]' : 'text-neutral-500'}`}
-                    />
-                    <span>{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
 
-            {/* Active Tab Body */}
-            <div className="flex-1 overflow-y-auto p-5 bg-white">
-              {/* TAB 1: COMANDAS & COZINHA (7 STATUSES + READY NOTIFY + WHATSAPP) */}
-              {activeTab === 'comandas' && (
-                <div className="space-y-5">
-                  {/* Filters */}
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-neutral-200">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-extrabold uppercase text-neutral-500 mr-1">
-                        Categoria:
-                      </span>
-                      {[
-                        { id: 'todas', label: 'Todas' },
-                        { id: 'delivery', label: 'Delivery' },
-                        { id: 'retirada', label: 'Retirada' },
-                        { id: 'mesa', label: 'Mesa Presencial' },
-                      ].map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() =>
-                            setCategoryFilter(c.id as 'todas' | OrderCategory)
-                          }
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
-                            categoryFilter === c.id
-                              ? 'bg-[#111111] text-[#D4A017] border-[#111111]'
-                              : 'bg-white text-neutral-700 border-neutral-300'
-                          }`}
-                        >
-                          {c.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-extrabold uppercase text-neutral-500">
-                        Status:
-                      </span>
-                      <select
-                        value={statusFilter}
-                        onChange={(e) =>
-                          setStatusFilter(e.target.value as 'todos' | OrderStatus)
+          {/* Active Tab Body */}
+          <div className="flex-1 overflow-y-auto p-5 bg-white">
+            {/* TAB 1: COMANDAS & COZINHA (7 STATUSES + READY NOTIFY + WHATSAPP + EXPORT CSV) */}
+            {activeTab === 'comandas' && (
+              <div className="space-y-5">
+                {/* Filters & Export CSV */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-neutral-200">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase text-neutral-500 mr-1">
+                      Categoria:
+                    </span>
+                    {[
+                      { id: 'todas', label: 'Todas' },
+                      { id: 'delivery', label: 'Delivery' },
+                      { id: 'retirada', label: 'Retirada' },
+                      { id: 'mesa', label: 'Mesa Presencial' },
+                    ].map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() =>
+                          setCategoryFilter(c.id as 'todas' | OrderCategory)
                         }
-                        className="px-3 py-1.5 border border-neutral-300 rounded-lg text-xs font-bold text-[#111111] bg-white"
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
+                          categoryFilter === c.id
+                            ? 'bg-[#111111] text-[#D4A017] border-[#111111]'
+                            : 'bg-white text-neutral-700 border-neutral-300'
+                        }`}
                       >
-                        <option value="todos">Todos os 7 Status</option>
-                        {ORDER_STATUS_LIST.map((st) => (
-                          <option key={st.id} value={st.id}>
-                            {st.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                        {c.label}
+                      </button>
+                    ))}
                   </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase text-neutral-500">
+                      Status:
+                    </span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) =>
+                        setStatusFilter(e.target.value as 'todos' | OrderStatus)
+                      }
+                      className="px-3 py-1.5 border border-neutral-300 rounded-lg text-xs font-bold text-[#111111] bg-white"
+                    >
+                      <option value="todos">Todos os 7 Status</option>
+                      {ORDER_STATUS_LIST.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleExportOrdersCsv}
+                      disabled={filteredOrders.length === 0}
+                      className="bg-[#111111] hover:bg-neutral-800 disabled:opacity-50 text-[#D4A017] font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer"
+                      title="Exportar lista de pedidos filtrados em CSV"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Exportar Pedidos (CSV)</span>
+                    </button>
+                  </div>
+                </div>
 
                   {/* Orders Grid */}
                   {filteredOrders.length === 0 ? (
@@ -1098,9 +1174,219 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 3: DASHBOARD & MAIS VENDIDOS */}
+              {/* TAB: CONVÊNIOS CORPORATIVOS (MARMITEX) */}
+              {activeTab === 'convenios' && (
+                <ConveniosMarmitexTab
+                  config={conveniosConfig}
+                  companies={convenioCompanies}
+                  pickups={marmitexPickups}
+                  dueAlerts={dueAlerts}
+                  subTab={convenioSubTab}
+                  onChangeSubTab={setConvenioSubTab}
+                  onReloadConvenios={loadConvenios}
+                />
+              )}
+
+              {/* TAB 3: DASHBOARD & VENDAS A PRAZO (CONVÊNIOS) + MAIS VENDIDOS */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6">
+                  {/* Vendas a Prazo · Convênio de Empresas (Integrado ao Dashboard Administrativo) */}
+                  <div className="border border-neutral-200 rounded-xl p-5 bg-neutral-50 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-[#111111] text-[#D4A017] flex items-center justify-center">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-base text-[#111111]">
+                            Vendas a Prazo · Convênios Corporativos (Marmitex)
+                          </h3>
+                          <p className="text-xs text-neutral-600">
+                            Resumo financeiro consolidado dos contratos de marmitex na parte administrativa.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('convenios');
+                          setConvenioSubTab('dashboard');
+                        }}
+                        className="bg-[#8A0000] hover:bg-[#6E0000] text-white font-bold px-3.5 py-2 rounded-lg text-xs cursor-pointer"
+                      >
+                        Gerenciar Convênios &rarr;
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      <div className="p-3.5 rounded-xl bg-white border border-neutral-200">
+                        <p className="text-[11px] font-bold uppercase text-neutral-500">
+                          Marmitex no Mês
+                        </p>
+                        <p className="text-xl font-black text-[#111111] mt-1 tabular-nums">
+                          {conveniosKpis.monthQty} un.
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">
+                          {conveniosKpis.activeCompanies} empresa(s) ativa(s)
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white border border-neutral-200">
+                        <p className="text-[11px] font-bold uppercase text-neutral-500">
+                          Faturamento Convênios (Mês)
+                        </p>
+                        <p className="text-xl font-black text-[#111111] mt-1 tabular-nums">
+                          {formatCurrency(conveniosKpis.monthRev)}
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 tabular-nums">
+                          Unitário: {formatCurrency(conveniosConfig.unitPrice)}
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-amber-50 border border-[#D4A017]">
+                        <p className="text-[11px] font-bold uppercase text-neutral-700">
+                          Total a Receber (A Prazo)
+                        </p>
+                        <p className="text-xl font-black text-[#111111] mt-1 tabular-nums">
+                          {formatCurrency(conveniosKpis.totalReceivable)}
+                        </p>
+                        <p className="text-[11px] text-neutral-700 mt-0.5">
+                          Faturas em aberto
+                        </p>
+                      </div>
+
+                      <div
+                        className={`p-3.5 rounded-xl border ${
+                          conveniosKpis.overdueAmount > 0
+                            ? 'bg-red-50 border-[#8A0000]'
+                            : 'bg-white border-neutral-200'
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold uppercase text-[#8A0000]">
+                          Faturas Vencidas / Atraso
+                        </p>
+                        <p className="text-xl font-black text-[#8A0000] mt-1 tabular-nums">
+                          {formatCurrency(conveniosKpis.overdueAmount)}
+                        </p>
+                        <p className="text-[11px] font-bold text-[#8A0000] mt-0.5 tabular-nums">
+                          {conveniosKpis.overdueCount} registro(s) vencido(s)
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#111111] text-white">
+                        <p className="text-[11px] font-bold uppercase text-[#D4A017]">
+                          Receita Consolidada Total
+                        </p>
+                        <p className="text-xl font-black text-white mt-1 tabular-nums">
+                          {formatCurrency(
+                            reportSummary.totalRevenue + conveniosKpis.monthRev
+                          )}
+                        </p>
+                        <p className="text-[11px] text-neutral-300 mt-0.5">
+                          Pedidos + Convênios
+                        </p>
+                      </div>
+                    </div>
+
+                    {dueAlerts.length > 0 && (
+                      <div className="p-3 rounded-lg bg-white border border-neutral-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-[#8A0000] flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
+                          <span>
+                            {dueAlerts.length} empresa(s) com vencimento próximo, hoje ou em atraso ({dueAlerts.map((a) => a.companyName).join(', ')}).
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('convenios');
+                            setConvenioSubTab('dashboard');
+                          }}
+                          className="font-extrabold text-[#111111] underline cursor-pointer"
+                        >
+                          Ver Alertas e Cobranças
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Contador de Visitantes do Aplicativo */}
+                  <div className="border border-neutral-200 rounded-xl p-5 bg-white space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-[#8A0000] text-[#D4A017] flex items-center justify-center">
+                          <Eye className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-base text-[#111111]">
+                            Contador de Visitantes do Aplicativo
+                          </h3>
+                          <p className="text-xs text-neutral-600">
+                            Monitoramento de acessos totais, visitantes únicos e tráfego dos últimos 7 dias.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200">
+                        <p className="text-[11px] font-bold uppercase text-neutral-500">
+                          Total de Visitas
+                        </p>
+                        <p className="text-2xl font-black text-[#111111] mt-1 tabular-nums">
+                          {visitorStats?.totalVisits ?? 0}
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">
+                          Acessos registrados no app
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200">
+                        <p className="text-[11px] font-bold uppercase text-neutral-500">
+                          Visitantes Únicos
+                        </p>
+                        <p className="text-2xl font-black text-[#8A0000] mt-1 tabular-nums">
+                          {visitorStats?.uniqueVisitors ?? 0}
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">
+                          Dispositivos distintos
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-amber-50 border border-[#D4A017]">
+                        <p className="text-[11px] font-bold uppercase text-neutral-700">
+                          Acessos Hoje
+                        </p>
+                        <p className="text-2xl font-black text-[#111111] mt-1 tabular-nums">
+                          {visitorStats?.todayVisits ?? 0}
+                        </p>
+                        <p className="text-[11px] text-neutral-700 mt-0.5">
+                          Visitas na data atual
+                        </p>
+                      </div>
+                    </div>
+
+                    {visitorStats?.last7Days && visitorStats.last7Days.length > 0 && (
+                      <div className="grid grid-cols-7 gap-2 pt-1">
+                        {visitorStats.last7Days.map((day) => (
+                          <div
+                            key={day.date}
+                            className="p-2 rounded-lg border border-neutral-200 bg-neutral-50 text-center"
+                          >
+                            <p className="text-[10px] font-bold text-neutral-500 tabular-nums">
+                              {day.label}
+                            </p>
+                            <p className="text-sm font-black text-[#111111] tabular-nums mt-0.5">
+                              {day.visits}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category Counts */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="p-4 rounded-xl border border-neutral-200 flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
@@ -1756,16 +2042,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       >
                         <div className="flex items-center gap-3">
                           <img
-                            src={p.image || CATEGORY_IMAGES[p.category]}
+                            src={resolveProductImage(p.image, p.category)}
                             alt={p.name}
                             onError={(e) => {
-                              const fallback = CATEGORY_IMAGES[p.category];
-                              if (
-                                e.currentTarget.src !==
-                                window.location.origin + fallback
-                              ) {
-                                e.currentTarget.src = fallback;
-                              }
+                              if (e.currentTarget.dataset.fallbackApplied) return;
+                              e.currentTarget.dataset.fallbackApplied = '1';
+                              e.currentTarget.src = CATEGORY_IMAGES[p.category];
                             }}
                             className="w-12 h-12 rounded-lg object-cover border border-neutral-200 shrink-0"
                           />
@@ -1822,159 +2104,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 5: CREDENCIAIS DO ADMINISTRADOR */}
-              {activeTab === 'seguranca' && (
-                <div className="max-w-lg space-y-5">
-                  <div>
-                    <h3 className="font-black text-base text-[#111111]">
-                      Credenciais de Login do Painel Administrativo
-                    </h3>
-                    <p className="text-xs text-neutral-600 mt-1">
-                      Atualize o usuário e a senha de acesso ao Painel Administrativo.
-                    </p>
-                  </div>
-
-                  {securityFeedback && (
-                    <div
-                      className={`p-3 rounded-lg border text-xs font-bold ${
-                        securityFeedback.type === 'ok'
-                          ? 'bg-amber-50 border-[#D4A017] text-[#111111]'
-                          : 'bg-red-50 border-[#8A0000] text-[#8A0000]'
-                      }`}
-                    >
-                      {securityFeedback.text}
-                    </div>
-                  )}
-
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      setSecurityFeedback(null);
-                      if (newPasswordInput.length < 6) {
-                        setSecurityFeedback({
-                          type: 'err',
-                          text: 'A nova senha deve ter no mínimo 6 caracteres.',
-                        });
-                        return;
-                      }
-                      if (newPasswordInput !== confirmNewPasswordInput) {
-                        setSecurityFeedback({
-                          type: 'err',
-                          text: 'A confirmação da nova senha não confere.',
-                        });
-                        return;
-                      }
-                      setSecurityLoading(true);
-                      try {
-                        const res = await fetch('/api/admin/change-password', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${adminToken}`,
-                          },
-                          body: JSON.stringify({
-                            currentPassword: currentPasswordInput,
-                            newUsername: newUsernameInput.trim(),
-                            newPassword: newPasswordInput,
-                          }),
-                        });
-                        const data = await res.json();
-                        if (!res.ok) {
-                          setSecurityFeedback({
-                            type: 'err',
-                            text: data.error || 'Erro ao atualizar credenciais.',
-                          });
-                        } else {
-                          setCurrentPasswordInput('');
-                          setNewPasswordInput('');
-                          setConfirmNewPasswordInput('');
-                          setUsername(data.username || newUsernameInput.trim());
-                          setSecurityFeedback({
-                            type: 'ok',
-                            text: `Credenciais atualizadas! Usuário ativo: ${data.username}.`,
-                          });
-                        }
-                      } catch {
-                        setSecurityFeedback({
-                          type: 'err',
-                          text: 'Erro de conexão com o servidor.',
-                        });
-                      } finally {
-                        setSecurityLoading(false);
-                      }
-                    }}
-                    className="p-5 rounded-xl border border-neutral-200 bg-neutral-50 space-y-4"
-                  >
-                    <div>
-                      <label className="block text-xs font-bold text-[#111111] mb-1">
-                        Usuário Administrador
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={newUsernameInput}
-                        onChange={(e) => setNewUsernameInput(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-[#111111] mb-1">
-                        Senha Atual *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        value={currentPasswordInput}
-                        onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-[#111111] mb-1">
-                        Nova Senha (mínimo 6 caracteres) *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        value={newPasswordInput}
-                        onChange={(e) => setNewPasswordInput(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-[#111111] mb-1">
-                        Confirmar Nova Senha *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        value={confirmNewPasswordInput}
-                        onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-lg text-sm text-[#111111]"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={securityLoading}
-                      className="bg-[#8A0000] hover:bg-[#6E0000] disabled:opacity-60 text-white font-bold px-5 py-2.5 rounded-lg text-xs cursor-pointer"
-                    >
-                      {securityLoading
-                        ? 'Atualizando...'
-                        : 'Atualizar Usuário e Senha'}
-                    </button>
-                  </form>
-                </div>
-              )}
             </div>
           </>
-        )}
       </div>
     </div>
   );
