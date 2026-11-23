@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   X,
   User,
@@ -73,28 +73,42 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [pixKeyCopied, setPixKeyCopied] = useState(false);
   const [pixConfirmed, setPixConfirmed] = useState(false);
 
+  const pixCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const pixKeyInputRef = useRef<HTMLInputElement | null>(null);
+
   const [sessionTxid] = useState(() =>
     `QP${Date.now().toString(36).toUpperCase().slice(-6)}`
   );
 
-  const pixCopiaECola = useMemo(
-    () =>
-      generatePixCopiaECola({
+  // Função dedicada para gerar dinamicamente o payload EMV do Pix Copia e Cola com base no total do pedido
+  const generateDynamicPixPayload = useCallback(
+    (orderTotal: number): string => {
+      const normalizedTotal = Number.isFinite(orderTotal) ? Math.max(0, orderTotal) : 0;
+      const dynamicTxid = `${sessionTxid}${Math.round(normalizedTotal * 100)}`.slice(0, 25);
+      return generatePixCopiaECola({
         pixKey: RESTAURANT_INFO.pixKey,
         merchantName: RESTAURANT_INFO.pixBeneficiary,
         merchantCity: RESTAURANT_INFO.city,
-        amount: total,
-        txid: `${sessionTxid}${Math.round(Math.max(0, total) * 100)}`.slice(0, 25),
-      }),
-    [total, sessionTxid]
+        amount: normalizedTotal,
+        txid: dynamicTxid,
+      });
+    },
+    [sessionTxid]
   );
+
+  const pixCopiaECola = useMemo(
+    () => generateDynamicPixPayload(total),
+    [generateDynamicPixPayload, total]
+  );
+
+  useEffect(() => {
+    setPixCodeCopied(false);
+  }, [total]);
 
   if (!isOpen) return null;
 
-  const handleCopyPixCode = async (e?: React.SyntheticEvent<HTMLInputElement | HTMLButtonElement>) => {
-    if (e && e.currentTarget instanceof HTMLInputElement) {
-      e.currentTarget.select();
-    }
+  const handleCopyPixCode = async () => {
+    pixCodeInputRef.current?.select();
     const ok = await copyTextToClipboard(pixCopiaECola);
     if (ok) {
       setPixCodeCopied(true);
@@ -102,10 +116,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  const handleCopyPixKey = async (e?: React.SyntheticEvent<HTMLInputElement | HTMLButtonElement>) => {
-    if (e && e.currentTarget instanceof HTMLInputElement) {
-      e.currentTarget.select();
-    }
+  const handleCopyPixKey = async () => {
+    pixKeyInputRef.current?.select();
     const ok = await copyTextToClipboard(RESTAURANT_INFO.pixKey);
     if (ok) {
       setPixKeyCopied(true);
@@ -557,6 +569,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input
+                          ref={pixCodeInputRef}
                           id="pix-copia-e-cola-input"
                           type="text"
                           readOnly
@@ -605,6 +618,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <input
+                          ref={pixKeyInputRef}
                           type="text"
                           readOnly
                           value={RESTAURANT_INFO.pixKey}
